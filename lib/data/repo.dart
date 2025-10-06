@@ -140,20 +140,20 @@ class Repo {
     return p.path;
   }
 
-  Future<String> exportProductsCsv() async {
+  Future<String> exportProductsCsv([String? targetDir]) async {
     final d = await _db.db;
     final rows = await d.query('products', orderBy: 'name');
     final csv = const ListToCsvConverter().convert([
       ['id','name','sku','price','stock'],
       ...rows.map((r)=>[r['id'], r['name'], r['sku'], r['price'], r['stock']])
     ]);
-    final path = await _docsPath();
+    final path = targetDir ?? await _docsPath();
     final file = File('$path/products.csv');
     await file.writeAsString(csv);
     return file.path;
   }
 
-  Future<List<String>> exportSalesCsv() async {
+  Future<List<String>> exportSalesCsv([String? targetDir]) async {
     final d = await _db.db;
     final sales = await d.query('sales', orderBy: 'created_at DESC');
     final items = await d.rawQuery('''
@@ -172,11 +172,11 @@ class Repo {
       ...items.map((it)=>[it['sale_id'], it['product_id'], it['name'], it['qty'], it['price']])
     ]);
 
-    final path = await _docsPath();
-    final f1 = File('$path/sales.csv');       // <-- perbaikan di sini
+  final path = targetDir ?? await _docsPath();
+  final f1 = File('$path/sales.csv');
     await f1.writeAsString(csvSales);
 
-    final f2 = File('$path/sale_items.csv');  // <-- dan di sini
+  final f2 = File('$path/sale_items.csv');
     await f2.writeAsString(csvItems);
 
     return [f1.path, f2.path];

@@ -68,17 +68,20 @@ class ProductsActions extends StatelessWidget {
       PopupMenuButton<String>(
         onSelected: (v) async {
           final repo = context.read<AppState>().repo;
-              if (v=='export_products') {
-            final path = await repo.exportProductsCsv();
+          if (v == 'export_products') {
+            // ask user for target directory; if cancelled, repo will use app exports dir
+            String? dir = await FilePicker.platform.getDirectoryPath();
+            final path = await repo.exportProductsCsv(dir);
             if (context.mounted) {
               showAppSnackBar(context, 'Produk diekspor ke: $path');
             }
-          } else if (v=='export_sales') {
-            final paths = await repo.exportSalesCsv();
+          } else if (v == 'export_sales') {
+            String? dir = await FilePicker.platform.getDirectoryPath();
+            final paths = await repo.exportSalesCsv(dir);
             if (context.mounted) {
               showAppSnackBar(context, 'Transaksi diekspor ke: ${paths.join(', ')}');
             }
-          } else if (v=='import_products') {
+          } else if (v == 'import_products') {
             final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
             if (res!=null && res.files.isNotEmpty) {
               final filePath = res.files.single.path!;
