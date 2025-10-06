@@ -48,7 +48,7 @@ class Repo {
   }
 
   /// Transaksi
-  Future<void> createSale(List<CartItem> items, {String? buyer}) async {
+  Future<void> createSale(List<CartItem> items, {String? buyer, String? buyerCode}) async {
     final d = await _db.db;
     await d.transaction((txn) async {
       // Validasi stok
@@ -66,6 +66,7 @@ class Repo {
         'created_at': DateTime.now().toIso8601String(),
         'total': total,
         'buyer': buyer,
+        'buyer_code': buyerCode,
       });
 
       for (final it in items) {
@@ -84,6 +85,23 @@ class Repo {
     });
   }
 
+  // Buyers table helpers
+  Future<void> addOrUpdateBuyer(String code, String name) async {
+    final d = await _db.db;
+    await d.insert('buyers', {'code': code, 'name': name}, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<Map<String, dynamic>?> getBuyer(String code) async {
+    final d = await _db.db;
+    final rows = await d.query('buyers', where: 'code=?', whereArgs: [code], limit: 1);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  Future<List<Map<String, dynamic>>> getBuyers() async {
+    final d = await _db.db;
+    return d.query('buyers', orderBy: 'name');
+  }
+
   Future<List<Map<String, dynamic>>> getSalesSummaryByDay() async {
     final d = await _db.db;
     return d.rawQuery('''
@@ -94,7 +112,7 @@ class Repo {
 
   Future<List<Map<String, dynamic>>> getSalesByDay(String day) async {
     final d = await _db.db;
-    return d.rawQuery('SELECT id, created_at, total, buyer FROM sales WHERE substr(created_at,1,10)=? ORDER BY created_at DESC', [day]);
+    return d.rawQuery('SELECT id, created_at, total, buyer, buyer_code FROM sales WHERE substr(created_at,1,10)=? ORDER BY created_at DESC', [day]);
   }
 
   Future<List<Map<String, dynamic>>> getSaleItems(int saleId) async {
@@ -106,9 +124,12 @@ class Repo {
     ''', [saleId]);
   }
 
-  Future<void> updateSaleBuyer(int saleId, String? buyer) async {
+  Future<void> updateSaleBuyer(int saleId, {String? buyer, String? buyerCode}) async {
     final d = await _db.db;
-    await d.update('sales', {'buyer': buyer}, where: 'id=?', whereArgs: [saleId]);
+    final values = <String, Object?>{};
+    values['buyer'] = buyer;
+    values['buyer_code'] = buyerCode;
+    await d.update('sales', values, where: 'id=?', whereArgs: [saleId]);
   }
 
   // ---------- CSV UTILS ----------

@@ -14,7 +14,7 @@ class AppDb {
     final p = join(await getDatabasesPath(), 'sales_app.db');
     _db = await openDatabase(
       p,
-      version: 2,
+      version: 3,
       onCreate: (d, v) async {
         await d.execute('''
           CREATE TABLE products(
@@ -30,7 +30,8 @@ class AppDb {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             created_at TEXT NOT NULL,
             total INTEGER NOT NULL,
-            buyer TEXT
+            buyer TEXT,
+            buyer_code TEXT
           );
         ''');
         await d.execute('''
@@ -44,11 +45,27 @@ class AppDb {
             FOREIGN KEY(product_id) REFERENCES products(id)
           );
         ''');
+        await d.execute('''
+          CREATE TABLE buyers(
+            code TEXT PRIMARY KEY,
+            name TEXT
+          );
+        ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           // add optional buyer column to sales
           await db.execute('ALTER TABLE sales ADD COLUMN buyer TEXT');
+        }
+        if (oldVersion < 3) {
+          // add buyer_code column and buyers table
+          await db.execute('ALTER TABLE sales ADD COLUMN buyer_code TEXT');
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS buyers(
+              code TEXT PRIMARY KEY,
+              name TEXT
+            );
+          ''');
         }
       },
     );

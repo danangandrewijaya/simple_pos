@@ -283,10 +283,14 @@ class CartPage extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: FilledButton.icon(
             onPressed: s.cart.isEmpty ? null : () async {
+              final codeC = TextEditingController();
               final nameC = TextEditingController();
               final ok = await showDialog<bool>(context: context, builder: (_)=>AlertDialog(
                 title: const Text('Simpan Transaksi'),
-                content: TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Nama Pembeli (opsional)')),
+                content: Column(mainAxisSize: MainAxisSize.min, children: [
+                  TextField(controller: codeC, decoration: const InputDecoration(labelText: 'Kode Pembeli (opsional)')),
+                  TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Nama Pembeli (opsional)')),
+                ]),
                 actions: [
                   TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
                   FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Simpan')),
@@ -294,7 +298,11 @@ class CartPage extends StatelessWidget {
               )) ?? false;
               if (!ok) return;
               try {
-                await s.checkout(buyer: nameC.text.isEmpty ? null : nameC.text);
+                await s.checkout(
+                  buyer: nameC.text.isEmpty ? null : nameC.text,
+                  buyerCode: codeC.text.isEmpty ? null : codeC.text,
+                  buyerName: nameC.text.isEmpty ? null : nameC.text,
+                );
                 if (context.mounted) {
                   showAppSnackBar(context, 'Transaksi tersimpan');
                 }
@@ -378,22 +386,24 @@ class _SalesOfDayPageState extends State<SalesOfDayPage> {
               final dt = DateTime.parse(s['created_at']).toLocal();
               final time = '${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
               final buyerName = (s['buyer'] as String?) ?? '';
+              final buyerCode = (s['buyer_code'] as String?) ?? '';
               return ListTile(
                 title: Text(idr(s['total'])),
                 subtitle: Text(time),
-                trailing: buyerName.isNotEmpty
+                trailing: (buyerName.isNotEmpty || buyerCode.isNotEmpty)
                     ? Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          const Text('Pembeli', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                          Text(buyerName, style: const TextStyle(fontSize: 12)),
+                          if (buyerCode.isNotEmpty) Text(buyerCode, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                          if (buyerName.isNotEmpty) Text(buyerName, style: const TextStyle(fontSize: 12)),
                         ],
                       )
                     : null,
                 onTap: () async {
                   final items = await repo.getSaleItems(s['id'] as int);
                   final buyerTextController = TextEditingController(text: (s['buyer'] as String?) ?? '');
+                  final buyerCodeController = TextEditingController(text: (s['buyer_code'] as String?) ?? '');
                   // ignore: use_build_context_synchronously
                   final saved = await showDialog<bool>(context: context, builder: (_)=>AlertDialog(
                     title: const Text('Detail Transaksi'),
@@ -401,6 +411,7 @@ class _SalesOfDayPageState extends State<SalesOfDayPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          TextField(controller: buyerCodeController, decoration: const InputDecoration(labelText: 'Kode Pembeli (opsional)')),
                           TextField(controller: buyerTextController, decoration: const InputDecoration(labelText: 'Nama Pembeli (opsional)')),
                           const SizedBox(height: 12),
                           ...items.map((it)=>ListTile(
@@ -417,10 +428,15 @@ class _SalesOfDayPageState extends State<SalesOfDayPage> {
                     ],
                   ));
                   if (saved == true) {
-                    await repo.updateSaleBuyer(s['id'] as int, buyerTextController.text.isEmpty ? null : buyerTextController.text);
+                    final code = buyerCodeController.text.isEmpty ? null : buyerCodeController.text;
+                    final name = buyerTextController.text.isEmpty ? null : buyerTextController.text;
+                    if (code != null && name != null) {
+                      await repo.addOrUpdateBuyer(code, name);
+                    }
+                    await repo.updateSaleBuyer(s['id'] as int, buyer: name, buyerCode: code);
                     // reload list
                     setState(_load);
-                    if (context.mounted) showAppSnackBar(context, 'Nama pembeli disimpan');
+                    if (context.mounted) showAppSnackBar(context, 'Data pembeli disimpan');
                   }
                 },
               );
