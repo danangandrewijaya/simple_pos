@@ -6,20 +6,7 @@ import 'package:provider/provider.dart';
 import 'data/models.dart';
 import 'data/money.dart';
 import 'state/app_state.dart';
-
-// Helper to show consistent SnackBars: clears existing, supports action
-void showAppSnackBar(BuildContext context, String message, {String? actionLabel, VoidCallback? onAction, Duration? duration}) {
-  final messenger = ScaffoldMessenger.of(context);
-  messenger.clearSnackBars();
-  final snack = SnackBar(
-    content: Text(message),
-    duration: duration ?? const Duration(seconds: 2),
-    action: (actionLabel != null && onAction != null)
-        ? SnackBarAction(label: actionLabel, onPressed: onAction)
-        : null,
-  );
-  messenger.showSnackBar(snack);
-}
+import 'ui/snackbars.dart';
 
 void main() {
   runApp(
@@ -158,6 +145,8 @@ class _ProductsPageState extends State<ProductsPage> {
                     showAppSnackBar(context, 'Ditambahkan — tersisa $remaining', actionLabel: 'Undo', onAction: (){
                       // remove one from cart as undo
                       s.changeQty(p, inCart.qty - 1);
+                      // show confirmation after undo
+                      showAppSnackBar(context, 'Penambahan dibatalkan');
                     });
                   },
                   onLongPress: () => showDialog(context: context, builder: (_) => EditProductDialog(p: p)),
@@ -351,16 +340,33 @@ class SummaryPage extends StatelessWidget {
   }
 }
 
-class SalesOfDayPage extends StatelessWidget {
+class SalesOfDayPage extends StatefulWidget {
   final String day;
   const SalesOfDayPage({super.key, required this.day});
+  @override
+  State<SalesOfDayPage> createState() => _SalesOfDayPageState();
+}
+
+class _SalesOfDayPageState extends State<SalesOfDayPage> {
+  late Future<List<Map<String, dynamic>>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() {
+    _future = context.read<AppState>().repo.getSalesByDay(widget.day);
+  }
+
   @override
   Widget build(BuildContext context) {
     final repo = context.read<AppState>().repo;
     return Scaffold(
-      appBar: AppBar(title: Text('Transaksi $day')),
+      appBar: AppBar(title: Text('Transaksi ${widget.day}')),
       body: FutureBuilder<List<Map<String,dynamic>>>(
-        future: repo.getSalesByDay(day),
+        future: _future,
         builder: (_, snap){
           if(!snap.hasData) return const Center(child: CircularProgressIndicator());
           final rows = snap.data!;
@@ -387,18 +393,16 @@ class SalesOfDayPage extends StatelessWidget {
                     : null,
                 onTap: () async {
                   final items = await repo.getSaleItems(s['id'] as int);
+                  final buyerTextController = TextEditingController(text: (s['buyer'] as String?) ?? '');
                   // ignore: use_build_context_synchronously
-                  showDialog(context: context, builder: (_)=>AlertDialog(
+                  final saved = await showDialog<bool>(context: context, builder: (_)=>AlertDialog(
                     title: const Text('Detail Transaksi'),
                     content: SingleChildScrollView(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if ((s['buyer'] as String?)?.isNotEmpty ?? false)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8.0),
-                              child: Row(children: [const Text('Pembeli: ', style: TextStyle(fontWeight: FontWeight.bold)), Text(s['buyer'] as String)]),
-                            ),
+                          TextField(controller: buyerTextController, decoration: const InputDecoration(labelText: 'Nama Pembeli (opsional)')),
+                          const SizedBox(height: 12),
                           ...items.map((it)=>ListTile(
                             dense: true,
                             title: Text(it['name'] as String),
@@ -407,8 +411,17 @@ class SalesOfDayPage extends StatelessWidget {
                         ],
                       ),
                     ),
-                    actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: const Text('Tutup'))],
+                    actions: [
+                      TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Tutup')),
+                      FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Simpan')),
+                    ],
                   ));
+                  if (saved == true) {
+                    await repo.updateSaleBuyer(s['id'] as int, buyerTextController.text.isEmpty ? null : buyerTextController.text);
+                    // reload list
+                    setState(_load);
+                    if (context.mounted) showAppSnackBar(context, 'Nama pembeli disimpan');
+                  }
                 },
               );
             },

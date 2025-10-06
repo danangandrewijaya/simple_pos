@@ -18,6 +18,17 @@ Perubahan dari starter:
 - DB SQLite lokal bernama `sales_app.db` otomatis dibuat.
 - Untuk Web/Desktop, sesuaikan storage (sqflite tidak native Web).
 
+## UI helpers
+SnackBar helper tersedia di `lib/ui/snackbars.dart`.
+Contoh penggunaan:
+
+```dart
+import 'ui/snackbars.dart';
+
+// di dalam build/context
+showAppSnackBar(context, 'Pesan singkat', actionLabel: 'Undo', onAction: () { /* undo */ });
+```
+
 
 # Simple POS — Filter & CSV
 Fitur tambahan:

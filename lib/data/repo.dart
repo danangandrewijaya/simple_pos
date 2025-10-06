@@ -106,6 +106,11 @@ class Repo {
     ''', [saleId]);
   }
 
+  Future<void> updateSaleBuyer(int saleId, String? buyer) async {
+    final d = await _db.db;
+    await d.update('sales', {'buyer': buyer}, where: 'id=?', whereArgs: [saleId]);
+  }
+
   // ---------- CSV UTILS ----------
   Future<String> _docsPath() async {
     final dir = await getApplicationDocumentsDirectory();
