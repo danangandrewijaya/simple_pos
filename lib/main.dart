@@ -36,9 +36,17 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Simple POS'),
-        // actions: idx==0? const [ProductsActions()] : null, // hide
+        actions: idx == 0 ? const [ProductsActions()] : null,
       ),
       body: pages[idx],
+      floatingActionButton: idx == 0
+          ? FloatingActionButton.extended(
+              onPressed: () => showDialog(context: context, builder: (_) => const AddProductDialog()),
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah Produk'),
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       bottomNavigationBar: NavigationBar(
         selectedIndex: idx,
         destinations: const [
@@ -56,16 +64,7 @@ class ProductsActions extends StatelessWidget {
   const ProductsActions({super.key});
   @override
   Widget build(BuildContext context) {
-    final s = context.watch<AppState>();
-    final thText = TextEditingController(text: s.lowStockThreshold.toString());
     return Row(children: [
-      const Text('Stok < '),
-      SizedBox(width: 48, child: TextField(
-        controller: thText,
-        keyboardType: TextInputType.number,
-        onSubmitted: (v){ final n=int.tryParse(v)??5; context.read<AppState>().setThreshold(n); },
-      )),
-      Switch(value: s.lowStockOnly, onChanged: (v)=>context.read<AppState>().toggleLowStock(v)),
       PopupMenuButton<String>(
         onSelected: (v) async {
           final repo = context.read<AppState>().repo;
@@ -105,62 +104,96 @@ class ProductsPage extends StatefulWidget { const ProductsPage({super.key}); @ov
 class _ProductsPageState extends State<ProductsPage> {
   final c = TextEditingController();
   @override
+  void initState() {
+    super.initState();
+    c.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    c.dispose();
+    super.dispose();
+  }
+  @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     return Column(
       children: [
         Padding(padding: const EdgeInsets.all(12), child: TextField(
-          controller: c, decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: 'Cari produk...', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          controller: c,
           onChanged: (v)=>s.loadProducts(v),
+          // show clear button when there's text
+          // (placed here so decoration can rebuild when controller changes)
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.search),
+            hintText: 'Cari produk...',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            suffixIcon: c.text.isNotEmpty ? IconButton(icon: const Icon(Icons.clear), onPressed: (){ c.clear(); s.loadProducts(''); }) : null,
+          ),
         )),
         Expanded(child: ListView.builder(
           itemCount: s.products.length,
           itemBuilder: (_, i) {
             final p = s.products[i];
-                return ListTile(
-                  title: Text(p.name),
-                  subtitle: Text(
-                    'SKU: ${p.sku ?? '-'} • Stok: ${p.stock}',
-                    style: p.stock == 0 ? const TextStyle(color: Colors.red) : null,
-                  ),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                final isOut = p.stock == 0;
+                Widget buildSubtitle() {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(idr(p.price)),
-                      const SizedBox(height: 4),
-                      p.stock > 0
-                          ? const Icon(Icons.add_circle)
-                          : const Icon(Icons.block, color: Colors.red),
+                      Text('SKU: ${p.sku ?? '-'} • Stok: ${p.stock}', style: isOut ? const TextStyle(color: Colors.red) : null),
+                      if (isOut) const SizedBox(height: 6),
+                      if (isOut)
+                        Chip(
+                          label: const Text('Stok Habis', style: TextStyle(color: Colors.red)),
+                          backgroundColor: Colors.redAccent.withOpacity(0.1),
+                          visualDensity: VisualDensity.compact,
+                        ),
                     ],
+                  );
+                }
+
+                void handleAdd() {
+                  final added = s.addToCart(p);
+                  if (!added) {
+                    showAppSnackBar(context, 'Stok tidak cukup');
+                    return;
+                  }
+                  final inCart = s.cart.firstWhere((c) => c.product.id == p.id, orElse: () => CartItem(p, 0));
+                  final remaining = p.stock - inCart.qty;
+                  showAppSnackBar(context, 'Ditambahkan ke keranjang — tersisa $remaining', actionLabel: 'Undo', onAction: (){
+                    s.changeQty(p, inCart.qty - 1);
+                    showAppSnackBar(context, 'Penambahan dibatalkan');
+                  });
+                }
+
+                return Opacity(
+                  opacity: isOut ? 0.7 : 1.0,
+                  child: ListTile(
+                    leading: CircleAvatar(child: Text(p.name.isNotEmpty ? p.name[0].toUpperCase() : '?')),
+                    title: Text(p.name),
+                    subtitle: buildSubtitle(),
+                    trailing: SizedBox(
+                      width: 120,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Expanded(child: Text(idr(p.price), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold))),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle),
+                            color: isOut ? Colors.grey : Theme.of(context).colorScheme.primary,
+                            onPressed: isOut ? null : handleAdd,
+                            tooltip: isOut ? 'Stok habis' : 'Tambah ke keranjang',
+                          ),
+                        ],
+                      ),
+                    ),
+                    onTap: isOut ? () { showAppSnackBar(context, 'Stok tidak cukup'); } : handleAdd,
+                    onLongPress: () => showDialog(context: context, builder: (_) => EditProductDialog(p: p)),
                   ),
-                  onTap: () {
-                    final added = s.addToCart(p);
-                    if (!added) {
-                      showAppSnackBar(context, 'Stok tidak cukup');
-                      return;
-                    }
-                    // find remaining stock after adding
-                    final inCart = s.cart.firstWhere((c) => c.product.id == p.id, orElse: () => CartItem(p, 0));
-                    final remaining = p.stock - inCart.qty;
-                    showAppSnackBar(context, 'Ditambahkan — tersisa $remaining', actionLabel: 'Undo', onAction: (){
-                      // remove one from cart as undo
-                      s.changeQty(p, inCart.qty - 1);
-                      // show confirmation after undo
-                      showAppSnackBar(context, 'Penambahan dibatalkan');
-                    });
-                  },
-                  onLongPress: () => showDialog(context: context, builder: (_) => EditProductDialog(p: p)),
                 );
           },
         )),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: FilledButton.icon(
-            onPressed: ()=>showDialog(context: context, builder: (_)=>const AddProductDialog()),
-            icon: const Icon(Icons.add),
-            label: const Text('Tambah Produk'),
-          ),
-        )
+        // bottom add button removed: FAB now provides quick add action
       ],
     );
   }
@@ -252,70 +285,128 @@ class CartPage extends StatelessWidget {
     final total = s.cart.fold<int>(0, (a, it) => a + it.qty * it.product.price);
     return Column(
       children: [
-        Expanded(child: ListView.builder(
-          itemCount: s.cart.length,
-          itemBuilder: (_, i) {
-            final it = s.cart[i];
-            return ListTile(
-              title: Text(it.product.name),
-              subtitle: Text('Harga: ${idr(it.product.price)}'),
-              trailing: SizedBox(
-                width: 120,
-                child: Row(children: [
-                  IconButton(icon: const Icon(Icons.remove), onPressed: (){
-                    final q = (it.qty - 1).clamp(0, 999);
-                    s.changeQty(it.product, q);
-                  }),
-                  Text('${it.qty}'),
-                  IconButton(icon: const Icon(Icons.add), onPressed: (){
-                    final success = s.changeQty(it.product, it.qty + 1);
-                    if (!success) {
-                        showAppSnackBar(context, 'Stok tidak cukup');
-                    }
-                  }),
-                ]),
-              ),
-            );
-          },
-        )),
-        ListTile(title: const Text('Total'), trailing: Text(idr(total))),
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: FilledButton.icon(
-            onPressed: s.cart.isEmpty ? null : () async {
-              final codeC = TextEditingController();
-              final nameC = TextEditingController();
-              final ok = await showDialog<bool>(context: context, builder: (_)=>AlertDialog(
-                title: const Text('Simpan Transaksi'),
-                content: Column(mainAxisSize: MainAxisSize.min, children: [
-                  TextField(controller: codeC, decoration: const InputDecoration(labelText: 'Kode Pembeli (opsional)')),
-                  TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Nama Pembeli (opsional)')),
-                ]),
-                actions: [
-                  TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
-                  FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Simpan')),
+        Expanded(
+          child: s.cart.isEmpty
+              ? const Center(child: Text('Keranjang kosong'))
+              : ListView.separated(
+                  itemCount: s.cart.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final it = s.cart[i];
+                    final subtotal = it.qty * it.product.price;
+                    return Dismissible(
+                      key: ValueKey(it.product.id ?? i),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        color: Colors.redAccent,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      onDismissed: (_) {
+                        s.changeQty(it.product, 0);
+                        showAppSnackBar(context, 'Item dihapus');
+                      },
+                      child: ListTile(
+                        leading: CircleAvatar(child: Text(it.product.name.isNotEmpty ? it.product.name[0].toUpperCase() : '?')),
+                        title: Text(it.product.name),
+                        subtitle: Text('${idr(it.product.price)} • Subtotal: ${idr(subtotal)}'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline),
+                              onPressed: () {
+                                final q = (it.qty - 1).clamp(0, 999);
+                                s.changeQty(it.product, q);
+                              },
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                              child: Text('${it.qty}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle_outline),
+                              onPressed: () {
+                                final success = s.changeQty(it.product, it.qty + 1);
+                                if (!success) showAppSnackBar(context, 'Stok tidak cukup');
+                              },
+                            ),
+                          ],
+                        ),
+                        onLongPress: () => showDialog(context: context, builder: (_) => EditProductDialog(p: it.product)),
+                      ),
+                    );
+                  },
+                ),
+        ),
+
+        // Bottom summary bar
+        Material(
+          elevation: 6,
+          color: Theme.of(context).colorScheme.surface,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Total'),
+                        const SizedBox(height: 4),
+                        Text(idr(total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      ],
+                    ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: s.cart.isEmpty
+                        ? null
+                        : () async {
+                            final codeC = TextEditingController();
+                            final nameC = TextEditingController();
+                            final ok = await showDialog<bool>(
+                                  context: context,
+                                  builder: (_) => AlertDialog(
+                                    title: const Text('Simpan Transaksi'),
+                                    content: Column(mainAxisSize: MainAxisSize.min, children: [
+                                      TextField(controller: codeC, decoration: const InputDecoration(labelText: 'Kode Pembeli (opsional)')),
+                                      TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Nama Pembeli (opsional)')),
+                                    ]),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+                                      FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Simpan')),
+                                    ],
+                                  ),
+                                ) ??
+                                false;
+                            if (!ok) return;
+                            try {
+                              await s.checkout(
+                                buyer: nameC.text.isEmpty ? null : nameC.text,
+                                buyerCode: codeC.text.isEmpty ? null : codeC.text,
+                                buyerName: nameC.text.isEmpty ? null : nameC.text,
+                              );
+                              if (context.mounted) {
+                                showAppSnackBar(context, 'Transaksi tersimpan');
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                showAppSnackBar(context, '$e');
+                              }
+                            }
+                          },
+                    icon: const Icon(Icons.check),
+                    label: const Text('Checkout'),
+                  ),
                 ],
-              )) ?? false;
-              if (!ok) return;
-              try {
-                await s.checkout(
-                  buyer: nameC.text.isEmpty ? null : nameC.text,
-                  buyerCode: codeC.text.isEmpty ? null : codeC.text,
-                  buyerName: nameC.text.isEmpty ? null : nameC.text,
-                );
-                if (context.mounted) {
-                  showAppSnackBar(context, 'Transaksi tersimpan');
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  showAppSnackBar(context, '$e');
-                }
-              }
-            },
-            icon: const Icon(Icons.check),
-            label: const Text('Checkout'),
+              ),
+            ),
           ),
-        )
+        ),
       ],
     );
   }

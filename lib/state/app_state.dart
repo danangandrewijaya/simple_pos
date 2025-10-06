@@ -14,7 +14,12 @@ class AppState with ChangeNotifier {
 
   Future<void> loadProducts([String q = '']) async {
     query = q;
-    products = await repo.getProducts(q: q.isEmpty ? null : q, lowStockLT: lowStockOnly ? lowStockThreshold : null);
+    // Fetch all products (optionally filtered by query), then optionally
+    // remove low-stock items client-side when lowStockOnly is enabled.
+    final all = await repo.getProducts(q: q.isEmpty ? null : q);
+    products = lowStockOnly
+        ? all.where((p) => p.stock >= lowStockThreshold).toList()
+        : all;
     notifyListeners();
   }
 
