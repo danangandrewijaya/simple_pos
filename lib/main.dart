@@ -1,122 +1,187 @@
+
+// lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'state/app_state.dart';
+import 'data/models.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(create: (_) => AppState()..loadProducts(), child: const MyApp()),
+  );
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+    return MaterialApp(title: 'Simple POS', theme: ThemeData(useMaterial3: true), home: const HomePage());
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int idx = 0;
+  @override
+  Widget build(BuildContext context) {
+    final pages = [const ProductsPage(), const CartPage(), const SummaryPage()];
+    return Scaffold(
+      appBar: AppBar(title: const Text('Simple POS')),
+      body: pages[idx],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: idx,
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.inventory_2), label: 'Produk'),
+          NavigationDestination(icon: Icon(Icons.shopping_cart), label: 'Keranjang'),
+          NavigationDestination(icon: Icon(Icons.receipt_long), label: 'Riwayat'),
+        ],
+        onDestinationSelected: (i) => setState(() => idx = i),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
-
+class ProductsPage extends StatefulWidget { const ProductsPage({super.key}); @override State<ProductsPage> createState()=>_ProductsPageState(); }
+class _ProductsPageState extends State<ProductsPage> {
+  final c = TextEditingController();
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+    final s = context.watch<AppState>();
+    return Column(
+      children: [
+        Padding(padding: const EdgeInsets.all(12), child: TextField(
+          controller: c, decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: 'Cari produk...', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          onChanged: (v)=>s.loadProducts(v),
+        )),
+        Expanded(child: ListView.builder(
+          itemCount: s.products.length,
+          itemBuilder: (_, i) {
+            final p = s.products[i];
+            return ListTile(
+              title: Text(p.name),
+              subtitle: Text('SKU: ${p.sku ?? '-'} • Stok: ${p.stock}'),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [Text('Rp ${p.price}'), const SizedBox(height: 4), const Icon(Icons.add_circle)],
+              ),
+              onTap: ()=>s.addToCart(p),
+            );
+          },
+        )),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: FilledButton.icon(
+            onPressed: ()=>showDialog(context: context, builder: (_)=>const AddProductDialog()),
+            icon: const Icon(Icons.add),
+            label: const Text('Tambah Produk'),
+          ),
+        )
+      ],
+    );
+  }
+}
+
+class AddProductDialog extends StatefulWidget { const AddProductDialog({super.key}); @override State<AddProductDialog> createState()=>_AddProductDialogState(); }
+class _AddProductDialogState extends State<AddProductDialog> {
+  final nameC=TextEditingController(), skuC=TextEditingController(), priceC=TextEditingController(), stockC=TextEditingController();
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Produk Baru'),
+      content: SingleChildScrollView(child: Column(children: [
+        TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Nama')),
+        TextField(controller: skuC, decoration: const InputDecoration(labelText: 'SKU (opsional)')),
+        TextField(controller: priceC, decoration: const InputDecoration(labelText: 'Harga'), keyboardType: TextInputType.number),
+        TextField(controller: stockC, decoration: const InputDecoration(labelText: 'Stok Awal'), keyboardType: TextInputType.number),
+      ])),
+      actions: [
+        TextButton(onPressed: ()=>Navigator.pop(context), child: const Text('Batal')),
+        FilledButton(onPressed: () async {
+          final s = context.read<AppState>();
+          await s.repo.addProduct(Product(
+            name: nameC.text, sku: skuC.text.isEmpty? null: skuC.text,
+            price: int.tryParse(priceC.text) ?? 0, stock: int.tryParse(stockC.text) ?? 0,
+          ));
+          await s.loadProducts();
+          if (context.mounted) Navigator.pop(context);
+        }, child: const Text('Simpan')),
+      ],
+    );
+  }
+}
+
+class CartPage extends StatelessWidget {
+  const CartPage({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final total = s.cart.fold<int>(0, (a, it) => a + it.qty * it.product.price);
+    return Column(
+      children: [
+        Expanded(child: ListView.builder(
+          itemCount: s.cart.length,
+          itemBuilder: (_, i) {
+            final it = s.cart[i];
+            return ListTile(
+              title: Text(it.product.name),
+              subtitle: Text('Harga: Rp ${it.product.price}'),
+              trailing: SizedBox(
+                width: 120,
+                child: Row(children: [
+                  IconButton(icon: const Icon(Icons.remove), onPressed: (){
+                    final q = (it.qty - 1).clamp(0, 999);
+                    s.changeQty(it.product, q);
+                  }),
+                  Text('${it.qty}'),
+                  IconButton(icon: const Icon(Icons.add), onPressed: (){
+                    s.changeQty(it.product, it.qty + 1);
+                  }),
+                ]),
+              ),
+            );
+          },
+        )),
+        ListTile(title: const Text('Total'), trailing: Text('Rp $total')),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: FilledButton.icon(
+            onPressed: s.cart.isEmpty ? null : () async { await s.checkout(); },
+            icon: const Icon(Icons.check),
+            label: const Text('Checkout'),
+          ),
+        )
+      ],
+    );
+  }
+}
+
+class SummaryPage extends StatelessWidget {
+  const SummaryPage({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    return FutureBuilder<List<Map<String,dynamic>>>(
+      future: s.repo.getSalesSummaryByDay(),
+      builder: (_, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final rows = snap.data!;
+        return ListView.builder(
+          itemCount: rows.length,
+          itemBuilder: (_, i) {
+            final r = rows[i];
+            return ListTile(
+              leading: const Icon(Icons.calendar_today),
+              title: Text(r['day']),
+              trailing: Text('Rp ${r['total']}'),
+            );
+          },
+        );
+      },
     );
   }
 }
