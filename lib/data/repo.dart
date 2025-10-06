@@ -1,4 +1,3 @@
-
 // lib/data/repo.dart
 import 'app_db.dart';
 import 'models.dart';
@@ -29,15 +28,28 @@ class Repo {
     return d.delete('products', where: 'id=?', whereArgs: [id]);
   }
 
-  /// Simpan transaksi + kurangi stok (atomic dengan transaction)
+  /// Simpan transaksi + kurangi stok (validasi stok, atomic)
   Future<void> createSale(List<CartItem> items) async {
     final d = await _db.db;
     await d.transaction((txn) async {
+      // Validasi stok
+      for (final it in items) {
+        final rows = await txn.query('products', where: 'id=?', whereArgs: [it.product.id], limit: 1);
+        final current = rows.first['stock'] as int;
+        if (it.qty <= 0) {
+          throw Exception('Qty untuk ${it.product.name} tidak boleh nol.');
+        }
+        if (current < it.qty) {
+          throw Exception('Stok ${it.product.name} kurang (tersisa $current, diminta ${it.qty}).');
+        }
+      }
+
       final total = items.fold<int>(0, (a, it) => a + it.qty * it.product.price);
       final saleId = await txn.insert('sales', {
         'created_at': DateTime.now().toIso8601String(),
         'total': total,
       });
+
       for (final it in items) {
         await txn.insert('sale_items', {
           'sale_id': saleId,
@@ -45,11 +57,13 @@ class Repo {
           'qty': it.qty,
           'price': it.product.price,
         });
-        // Kurangi stok (cegah negatif stok)
-        await txn.rawUpdate(
-          'UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?',
-          [it.qty, it.product.id, it.qty],
+        final updated = await txn.rawUpdate(
+          'UPDATE products SET stock = stock - ? WHERE id = ?',
+          [it.qty, it.product.id],
         );
+        if (updated != 1) {
+          throw Exception('Gagal mengurangi stok ${it.product.name}.');
+        }
       }
     });
   }
@@ -60,5 +74,19 @@ class Repo {
       SELECT substr(created_at,1,10) AS day, SUM(total) AS total
       FROM sales GROUP BY day ORDER BY day DESC
     ''');
+  }
+
+  Future<List<Map<String, dynamic>>> getSalesByDay(String day) async {
+    final d = await _db.db;
+    return d.rawQuery('SELECT id, created_at, total FROM sales WHERE substr(created_at,1,10)=? ORDER BY created_at DESC', [day]);
+  }
+
+  Future<List<Map<String, dynamic>>> getSaleItems(int saleId) async {
+    final d = await _db.db;
+    return d.rawQuery('''
+      SELECT si.qty, si.price, p.name
+      FROM sale_items si JOIN products p ON p.id = si.product_id
+      WHERE si.sale_id=?
+    ''', [saleId]);
   }
 }

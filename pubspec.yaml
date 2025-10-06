@@ -1,7 +1,7 @@
 name: simple_pos
 description: Simple offline POS (stok & transaksi) using Flutter + SQLite
 publish_to: "none"
-version: 0.1.0+1
+version: 0.2.0+1
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -12,6 +12,7 @@ dependencies:
   provider: ^6.0.5
   sqflite: ^2.3.0
   path: ^1.8.3
+  intl: ^0.20.2
 
 flutter:
   uses-material-design: true

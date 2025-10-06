@@ -1,4 +1,3 @@
-
 // lib/data/models.dart
 class Product {
   final int? id;

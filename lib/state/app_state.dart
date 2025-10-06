@@ -1,4 +1,3 @@
-
 // lib/state/app_state.dart
 import 'package:flutter/foundation.dart';
 import '../data/models.dart';
