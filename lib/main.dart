@@ -277,8 +277,18 @@ class CartPage extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: FilledButton.icon(
             onPressed: s.cart.isEmpty ? null : () async {
+              final nameC = TextEditingController();
+              final ok = await showDialog<bool>(context: context, builder: (_)=>AlertDialog(
+                title: const Text('Simpan Transaksi'),
+                content: TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Nama Pembeli (opsional)')),
+                actions: [
+                  TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
+                  FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Simpan')),
+                ],
+              )) ?? false;
+              if (!ok) return;
               try {
-                await s.checkout();
+                await s.checkout(buyer: nameC.text.isEmpty ? null : nameC.text);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaksi tersimpan')));
                 }
@@ -343,9 +353,21 @@ class SalesOfDayPage extends StatelessWidget {
             itemBuilder: (_, i){
               final s = rows[i];
               final dt = DateTime.parse(s['created_at']).toLocal();
+              final time = '${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
+              final buyerName = (s['buyer'] as String?) ?? '';
               return ListTile(
                 title: Text(idr(s['total'])),
-                subtitle: Text('${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}'),
+                subtitle: Text(time),
+                trailing: buyerName.isNotEmpty
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text('Pembeli', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                          Text(buyerName, style: const TextStyle(fontSize: 12)),
+                        ],
+                      )
+                    : null,
                 onTap: () async {
                   final items = await repo.getSaleItems(s['id'] as int);
                   // ignore: use_build_context_synchronously
@@ -354,11 +376,18 @@ class SalesOfDayPage extends StatelessWidget {
                     content: SingleChildScrollView(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        children: items.map((it)=>ListTile(
-                          dense: true,
-                          title: Text(it['name'] as String),
-                          trailing: Text('${it['qty']} x ${idr(it['price'])}'),
-                        )).toList(),
+                        children: [
+                          if ((s['buyer'] as String?)?.isNotEmpty ?? false)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8.0),
+                              child: Row(children: [const Text('Pembeli: ', style: TextStyle(fontWeight: FontWeight.bold)), Text(s['buyer'] as String)]),
+                            ),
+                          ...items.map((it)=>ListTile(
+                            dense: true,
+                            title: Text(it['name'] as String),
+                            trailing: Text('${it['qty']} x ${idr(it['price'])}'),
+                          )).toList(),
+                        ],
                       ),
                     ),
                     actions: [TextButton(onPressed: ()=>Navigator.pop(context), child: const Text('Tutup'))],

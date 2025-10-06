@@ -1,6 +1,6 @@
 // lib/data/app_db.dart
-import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
 
 class AppDb {
   static final AppDb _i = AppDb._();
@@ -14,7 +14,7 @@ class AppDb {
     final p = join(await getDatabasesPath(), 'sales_app.db');
     _db = await openDatabase(
       p,
-      version: 1,
+      version: 2,
       onCreate: (d, v) async {
         await d.execute('''
           CREATE TABLE products(
@@ -29,7 +29,8 @@ class AppDb {
           CREATE TABLE sales(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             created_at TEXT NOT NULL,
-            total INTEGER NOT NULL
+            total INTEGER NOT NULL,
+            buyer TEXT
           );
         ''');
         await d.execute('''
@@ -43,6 +44,12 @@ class AppDb {
             FOREIGN KEY(product_id) REFERENCES products(id)
           );
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // add optional buyer column to sales
+          await db.execute('ALTER TABLE sales ADD COLUMN buyer TEXT');
+        }
       },
     );
     return _db!;

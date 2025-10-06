@@ -62,10 +62,10 @@ class AppState with ChangeNotifier {
     return true;
   }
 
-  Future<void> checkout() async {
+  Future<void> checkout({String? buyer}) async {
     cart.removeWhere((c) => c.qty <= 0);
     if (cart.isEmpty) return;
-    await repo.createSale(cart);
+    await repo.createSale(cart, buyer: buyer);
     cart.clear();
     await loadProducts(query);
     notifyListeners();

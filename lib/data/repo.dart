@@ -48,7 +48,7 @@ class Repo {
   }
 
   /// Transaksi
-  Future<void> createSale(List<CartItem> items) async {
+  Future<void> createSale(List<CartItem> items, {String? buyer}) async {
     final d = await _db.db;
     await d.transaction((txn) async {
       // Validasi stok
@@ -65,6 +65,7 @@ class Repo {
       final saleId = await txn.insert('sales', {
         'created_at': DateTime.now().toIso8601String(),
         'total': total,
+        'buyer': buyer,
       });
 
       for (final it in items) {
@@ -93,7 +94,7 @@ class Repo {
 
   Future<List<Map<String, dynamic>>> getSalesByDay(String day) async {
     final d = await _db.db;
-    return d.rawQuery('SELECT id, created_at, total FROM sales WHERE substr(created_at,1,10)=? ORDER BY created_at DESC', [day]);
+    return d.rawQuery('SELECT id, created_at, total, buyer FROM sales WHERE substr(created_at,1,10)=? ORDER BY created_at DESC', [day]);
   }
 
   Future<List<Map<String, dynamic>>> getSaleItems(int saleId) async {
@@ -136,8 +137,8 @@ class Repo {
     ''');
 
     final csvSales = const ListToCsvConverter().convert([
-      ['id','created_at','total'],
-      ...sales.map((s)=>[s['id'], s['created_at'], s['total']])
+      ['id','created_at','total','buyer'],
+      ...sales.map((s)=>[s['id'], s['created_at'], s['total'], s['buyer']])
     ]);
 
     final csvItems = const ListToCsvConverter().convert([
