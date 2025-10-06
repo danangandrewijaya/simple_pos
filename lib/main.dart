@@ -22,6 +22,27 @@ class MyApp extends StatelessWidget {
   }
 }
 
+class KoperasiLogo extends StatelessWidget {
+  final double size;
+  const KoperasiLogo({super.key, this.size = 36});
+  @override
+  Widget build(BuildContext context) {
+    // Simple red-white circular logo with a store icon centered.
+      // Use theme colors so logo adapts to light/dark or custom themes
+      final cs = Theme.of(context).colorScheme;
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: cs.primary,
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 2)],
+        ),
+        child: Center(child: Icon(Icons.storefront, color: cs.onPrimary, size: size * 0.55)),
+      );
+  }
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
   @override
@@ -35,7 +56,11 @@ class _HomePageState extends State<HomePage> {
     final pages = [const ProductsPage(), const CartPage(), const SummaryPage()];
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Simple POS'),
+        title: Row(children: const [
+          KoperasiLogo(size: 36),
+          SizedBox(width: 10),
+          Text('Simple POS')
+        ]),
         actions: idx == 0 ? const [ProductsActions()] : null,
       ),
       body: pages[idx],
