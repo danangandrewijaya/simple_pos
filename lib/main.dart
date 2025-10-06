@@ -7,6 +7,20 @@ import 'data/models.dart';
 import 'data/money.dart';
 import 'state/app_state.dart';
 
+// Helper to show consistent SnackBars: clears existing, supports action
+void showAppSnackBar(BuildContext context, String message, {String? actionLabel, VoidCallback? onAction, Duration? duration}) {
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.clearSnackBars();
+  final snack = SnackBar(
+    content: Text(message),
+    duration: duration ?? const Duration(seconds: 2),
+    action: (actionLabel != null && onAction != null)
+        ? SnackBarAction(label: actionLabel, onPressed: onAction)
+        : null,
+  );
+  messenger.showSnackBar(snack);
+}
+
 void main() {
   runApp(
     ChangeNotifierProvider(create: (_) => AppState()..loadProducts(), child: const MyApp()),
@@ -68,15 +82,15 @@ class ProductsActions extends StatelessWidget {
       PopupMenuButton<String>(
         onSelected: (v) async {
           final repo = context.read<AppState>().repo;
-          if (v=='export_products') {
+              if (v=='export_products') {
             final path = await repo.exportProductsCsv();
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Produk diekspor ke: $path')));
+              showAppSnackBar(context, 'Produk diekspor ke: $path');
             }
           } else if (v=='export_sales') {
             final paths = await repo.exportSalesCsv();
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Transaksi diekspor ke: ${paths.join(', ')}')));
+              showAppSnackBar(context, 'Transaksi diekspor ke: ${paths.join(', ')}');
             }
           } else if (v=='import_products') {
             final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
@@ -85,7 +99,7 @@ class ProductsActions extends StatelessWidget {
               final n = await repo.importProductsCsv(filePath);
               await context.read<AppState>().loadProducts();
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Impor selesai: $n produk')));
+                showAppSnackBar(context, 'Impor selesai: $n produk');
               }
             }
           }
@@ -135,13 +149,16 @@ class _ProductsPageState extends State<ProductsPage> {
                   onTap: () {
                     final added = s.addToCart(p);
                     if (!added) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Stok tidak cukup')));
+                      showAppSnackBar(context, 'Stok tidak cukup');
                       return;
                     }
                     // find remaining stock after adding
                     final inCart = s.cart.firstWhere((c) => c.product.id == p.id, orElse: () => CartItem(p, 0));
                     final remaining = p.stock - inCart.qty;
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ditambahkan — tersisa $remaining')));
+                    showAppSnackBar(context, 'Ditambahkan — tersisa $remaining', actionLabel: 'Undo', onAction: (){
+                      // remove one from cart as undo
+                      s.changeQty(p, inCart.qty - 1);
+                    });
                   },
                   onLongPress: () => showDialog(context: context, builder: (_) => EditProductDialog(p: p)),
                 );
@@ -264,7 +281,7 @@ class CartPage extends StatelessWidget {
                   IconButton(icon: const Icon(Icons.add), onPressed: (){
                     final success = s.changeQty(it.product, it.qty + 1);
                     if (!success) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Stok tidak cukup')));
+                        showAppSnackBar(context, 'Stok tidak cukup');
                     }
                   }),
                 ]),
@@ -290,11 +307,11 @@ class CartPage extends StatelessWidget {
               try {
                 await s.checkout(buyer: nameC.text.isEmpty ? null : nameC.text);
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaksi tersimpan')));
+                  showAppSnackBar(context, 'Transaksi tersimpan');
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                  showAppSnackBar(context, '$e');
                 }
               }
             },
