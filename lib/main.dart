@@ -1,9 +1,11 @@
 // lib/main.dart
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'state/app_state.dart';
+
 import 'data/models.dart';
 import 'data/money.dart';
+import 'state/app_state.dart';
 
 void main() {
   runApp(
@@ -31,7 +33,10 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final pages = [const ProductsPage(), const CartPage(), const SummaryPage()];
     return Scaffold(
-      appBar: AppBar(title: const Text('Simple POS')),
+      appBar: AppBar(
+        title: const Text('Simple POS'),
+        // actions: idx==0? const [ProductsActions()] : null, // hide
+      ),
       body: pages[idx],
       bottomNavigationBar: NavigationBar(
         selectedIndex: idx,
@@ -43,6 +48,55 @@ class _HomePageState extends State<HomePage> {
         onDestinationSelected: (i) => setState(() => idx = i),
       ),
     );
+  }
+}
+
+class ProductsActions extends StatelessWidget {
+  const ProductsActions({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    final thText = TextEditingController(text: s.lowStockThreshold.toString());
+    return Row(children: [
+      const Text('Stok < '),
+      SizedBox(width: 48, child: TextField(
+        controller: thText,
+        keyboardType: TextInputType.number,
+        onSubmitted: (v){ final n=int.tryParse(v)??5; context.read<AppState>().setThreshold(n); },
+      )),
+      Switch(value: s.lowStockOnly, onChanged: (v)=>context.read<AppState>().toggleLowStock(v)),
+      PopupMenuButton<String>(
+        onSelected: (v) async {
+          final repo = context.read<AppState>().repo;
+          if (v=='export_products') {
+            final path = await repo.exportProductsCsv();
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Produk diekspor ke: $path')));
+            }
+          } else if (v=='export_sales') {
+            final paths = await repo.exportSalesCsv();
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Transaksi diekspor ke: ${paths.join(', ')}')));
+            }
+          } else if (v=='import_products') {
+            final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
+            if (res!=null && res.files.isNotEmpty) {
+              final filePath = res.files.single.path!;
+              final n = await repo.importProductsCsv(filePath);
+              await context.read<AppState>().loadProducts();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Impor selesai: $n produk')));
+              }
+            }
+          }
+        },
+        itemBuilder: (c)=>const [
+          PopupMenuItem(value:'export_products', child: Text('Ekspor CSV - Produk')),
+          PopupMenuItem(value:'export_sales', child: Text('Ekspor CSV - Transaksi')),
+          PopupMenuItem(value:'import_products', child: Text('Impor CSV - Produk')),
+        ],
+      ),
+    ]);
   }
 }
 
@@ -62,16 +116,35 @@ class _ProductsPageState extends State<ProductsPage> {
           itemCount: s.products.length,
           itemBuilder: (_, i) {
             final p = s.products[i];
-            return ListTile(
-              title: Text(p.name),
-              subtitle: Text('SKU: ${p.sku ?? '-'} • Stok: ${p.stock}'),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [Text(idr(p.price)), const SizedBox(height: 4), const Icon(Icons.add_circle)],
-              ),
-              onTap: ()=>s.addToCart(p),
-              onLongPress: () => showDialog(context: context, builder: (_) => EditProductDialog(p: p)),
-            );
+                return ListTile(
+                  title: Text(p.name),
+                  subtitle: Text(
+                    'SKU: ${p.sku ?? '-'} • Stok: ${p.stock}',
+                    style: p.stock == 0 ? const TextStyle(color: Colors.red) : null,
+                  ),
+                  trailing: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(idr(p.price)),
+                      const SizedBox(height: 4),
+                      p.stock > 0
+                          ? const Icon(Icons.add_circle)
+                          : const Icon(Icons.block, color: Colors.red),
+                    ],
+                  ),
+                  onTap: () {
+                    final added = s.addToCart(p);
+                    if (!added) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Stok tidak cukup')));
+                      return;
+                    }
+                    // find remaining stock after adding
+                    final inCart = s.cart.firstWhere((c) => c.product.id == p.id, orElse: () => CartItem(p, 0));
+                    final remaining = p.stock - inCart.qty;
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ditambahkan — tersisa $remaining')));
+                  },
+                  onLongPress: () => showDialog(context: context, builder: (_) => EditProductDialog(p: p)),
+                );
           },
         )),
         Padding(
@@ -189,7 +262,10 @@ class CartPage extends StatelessWidget {
                   }),
                   Text('${it.qty}'),
                   IconButton(icon: const Icon(Icons.add), onPressed: (){
-                    s.changeQty(it.product, it.qty + 1);
+                    final success = s.changeQty(it.product, it.qty + 1);
+                    if (!success) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Stok tidak cukup')));
+                    }
                   }),
                 ]),
               ),

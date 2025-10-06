@@ -1,16 +1,30 @@
-# simple_pos
+# Simple POS (Flutter + SQLite)
 
-A new Flutter project.
+Aplikasi mobile sederhana untuk stok & transaksi penjualan. Offline-first (SQLite).
+## Fitur
+- CRUD Produk (nama, SKU, harga, stok)
+- Keranjang & Checkout (otomatis kurangi stok)
+- Ringkasan penjualan per hari
 
-## Getting Started
 
-This project is a starting point for a Flutter application.
+# Simple POS (Plus) — Flutter + SQLite
+Perubahan dari starter:
+- Format Rupiah (`intl`)
+- Validasi stok & error handling saat checkout
+- Edit/Hapus produk (long-press item)
+- Riwayat: tap hari untuk lihat transaksi & detail item
 
-A few resources to get you started if this is your first Flutter project:
+## Catatan
+- DB SQLite lokal bernama `sales_app.db` otomatis dibuat.
+- Untuk Web/Desktop, sesuaikan storage (sqflite tidak native Web).
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+# Simple POS — Filter & CSV
+Fitur tambahan:
+- Pencarian nama/SKU + filter stok menipis (threshold bisa diubah di AppBar).
+- Ekspor CSV: `products.csv`, `sales.csv`, `sale_items.csv` ke folder dokumen aplikasi (`exports/`).
+- Impor CSV produk (header fleksibel).
+
+Plugin baru: `path_provider`, `csv`, `file_picker`, `intl`.
+
+Catatan: impor transaksi belum tersedia (ekspor saja).
