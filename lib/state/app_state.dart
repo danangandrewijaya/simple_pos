@@ -1,5 +1,6 @@
 // lib/state/app_state.dart
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models.dart';
 import '../data/repo.dart';
@@ -11,6 +12,23 @@ class AppState with ChangeNotifier {
   bool lowStockOnly = false;
   int lowStockThreshold = 5;
   String query = '';
+  String appTitle = 'Simple POS';
+
+  static const _prefTitleKey = 'app_title';
+
+  /// Load persisted settings (title). Call early in app startup.
+  Future<void> loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    appTitle = prefs.getString(_prefTitleKey) ?? appTitle;
+    notifyListeners();
+  }
+
+  Future<void> saveTitle(String title) async {
+    appTitle = title;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefTitleKey, title);
+    notifyListeners();
+  }
 
   Future<void> loadProducts([String q = '']) async {
     query = q;

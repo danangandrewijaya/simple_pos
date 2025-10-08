@@ -9,8 +9,12 @@ import 'state/app_state.dart';
 import 'ui/snackbars.dart';
 
 void main() {
+  final appState = AppState();
   runApp(
-    ChangeNotifierProvider(create: (_) => AppState()..loadProducts(), child: const MyApp()),
+    ChangeNotifierProvider(
+      create: (_) => appState..loadProducts()..loadSettings(),
+      child: const MyApp(),
+    ),
   );
 }
 
@@ -18,7 +22,11 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(title: 'Simple POS', theme: ThemeData(useMaterial3: true), home: const HomePage());
+    return MaterialApp(
+      title: context.watch<AppState>().appTitle,
+      theme: ThemeData(useMaterial3: true),
+      home: const HomePage(),
+    );
   }
 }
 
@@ -35,8 +43,17 @@ class _HomePageState extends State<HomePage> {
     final pages = [const ProductsPage(), const CartPage(), const SummaryPage()];
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Simple POS'),
-        actions: idx == 0 ? const [ProductsActions()] : null,
+        title: Text(context.select((AppState s) => s.appTitle)),
+        actions: [
+          if (idx == 0) const ProductsActions(),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Pengaturan',
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
+            },
+          ),
+        ],
       ),
       body: pages[idx],
       floatingActionButton: idx == 0
@@ -532,6 +549,61 @@ class SalesOfDayPage extends StatefulWidget {
   const SalesOfDayPage({super.key, required this.day});
   @override
   State<SalesOfDayPage> createState() => _SalesOfDayPageState();
+}
+
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({super.key});
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  late final TextEditingController _titleC;
+  @override
+  void initState() {
+    super.initState();
+    final s = context.read<AppState>();
+    _titleC = TextEditingController(text: s.appTitle);
+  }
+
+  @override
+  void dispose() {
+    _titleC.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<AppState>();
+    return Scaffold(
+      appBar: AppBar(title: const Text('Pengaturan')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Judul Aplikasi', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            TextField(controller: _titleC, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'Masukkan judul aplikasi')),
+            const SizedBox(height: 12),
+            Row(children: [
+              FilledButton(onPressed: () async {
+                final newTitle = _titleC.text.trim();
+                await s.saveTitle(newTitle.isEmpty ? 'Simple POS' : newTitle);
+                if (context.mounted) showAppSnackBar(context, 'Judul disimpan');
+              }, child: const Text('Simpan')),
+              const SizedBox(width: 12),
+              OutlinedButton(onPressed: () async {
+                _titleC.text = 'Simple POS';
+                await s.saveTitle('Simple POS');
+                if (context.mounted) showAppSnackBar(context, 'Judul direset');
+              }, child: const Text('Reset')),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class CustomersPage extends StatefulWidget {
