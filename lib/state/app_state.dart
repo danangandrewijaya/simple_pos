@@ -67,14 +67,16 @@ class AppState with ChangeNotifier {
     return true;
   }
 
-  Future<void> checkout({String? buyer, String? buyerCode, String? buyerName}) async {
+  Future<void> checkout({int? customerId, String? customerCode, String? customerName}) async {
     cart.removeWhere((c) => c.qty <= 0);
     if (cart.isEmpty) return;
-    // If buyerCode provided and buyerName non-empty, store/update buyer
-    if (buyerCode != null && buyerCode.isNotEmpty && buyerName != null && buyerName.isNotEmpty) {
-      await repo.addOrUpdateBuyer(buyerCode, buyerName);
+    // If customerCode provided and customerName non-empty, store/update customer
+    if (customerCode != null && customerCode.isNotEmpty && customerName != null && customerName.isNotEmpty) {
+      // ensure customer exists and get id
+      final id = await repo.addOrUpdateCustomer(customerCode, customerName);
+      customerId ??= id;
     }
-    await repo.createSale(cart, buyer: buyer, buyerCode: buyerCode);
+    await repo.createSale(cart, customerId: customerId);
     cart.clear();
     await loadProducts(query);
     notifyListeners();

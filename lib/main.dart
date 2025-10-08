@@ -91,12 +91,15 @@ class ProductsActions extends StatelessWidget {
                 showAppSnackBar(context, 'Impor selesai: $n produk');
               }
             }
+          } else if (v == 'manage_customers') {
+            Navigator.push(context, MaterialPageRoute(builder: (_)=>const CustomersPage()));
           }
         },
         itemBuilder: (c)=>const [
           PopupMenuItem(value:'export_products', child: Text('Ekspor CSV - Produk')),
           PopupMenuItem(value:'export_sales', child: Text('Ekspor CSV - Transaksi')),
           PopupMenuItem(value:'import_products', child: Text('Impor CSV - Produk')),
+          PopupMenuItem(value:'manage_customers', child: Text('Manajemen Customer')),
         ],
       ),
     ]);
@@ -369,30 +372,112 @@ class CartPage extends StatelessWidget {
                     onPressed: s.cart.isEmpty
                         ? null
                         : () async {
+                            // allow selecting customer from existing customers (optional)
+                            final customers = await s.repo.getCustomers();
+                            // dedupe customers by id to avoid duplicate Dropdown values
+                            final _seen = <int>{};
+                            final uniqueCustomers = <Map<String,dynamic>>[];
+                            for (final c in customers) {
+                              final id = c['id'] as int?;
+                              if (id == null) continue;
+                              if (_seen.add(id)) uniqueCustomers.add(c);
+                            }
                             final codeC = TextEditingController();
+                            // selected customer will populate the code/name fields directly
                             final nameC = TextEditingController();
+                            int? selectedCustomerId;
+                            int selectedMode = 0; // 0 = pilih existing, 1 = input baru
                             final ok = await showDialog<bool>(
                                   context: context,
-                                  builder: (_) => AlertDialog(
-                                    title: const Text('Simpan Transaksi'),
-                                    content: Column(mainAxisSize: MainAxisSize.min, children: [
-                                      TextField(controller: codeC, decoration: const InputDecoration(labelText: 'Kode Pembeli (opsional)')),
-                                      TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Nama Pembeli (opsional)')),
-                                    ]),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-                                      FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Simpan')),
-                                    ],
-                                  ),
+                                  builder: (_) => StatefulBuilder(builder: (context, setState) {
+                                    return AlertDialog(
+                                      title: const Text('Simpan Transaksi'),
+                                      content: Column(mainAxisSize: MainAxisSize.min, children: [
+                                        // Mode selector
+                                        RadioListTile<int>(
+                                          value: 0,
+                                          groupValue: selectedMode,
+                                          onChanged: (v) => setState(() => selectedMode = v ?? 0),
+                                          title: const Text('Pilih customer dari daftar (disarankan)'),
+                                          subtitle: const Text('Gunakan customer yang sudah ada untuk konsistensi'),
+                                        ),
+                                        if (selectedMode == 0)
+                                          // Autocomplete allowing typing to filter customers by name or code
+                                          Autocomplete<Map<String, dynamic>>(
+                                            displayStringForOption: (c) => '${c['name'] ?? ''} (${c['code']})',
+                                            optionsBuilder: (TextEditingValue txt) {
+                                              final q = txt.text.trim().toLowerCase();
+                                              if (q.isEmpty) return uniqueCustomers;
+                                              return uniqueCustomers.where((c) {
+                                                final name = (c['name'] as String?)?.toLowerCase() ?? '';
+                                                final code = (c['code'] as String?)?.toLowerCase() ?? '';
+                                                return name.contains(q) || code.contains(q);
+                                              }).toList();
+                                            },
+                                            onSelected: (c) {
+                                              setState(() {
+                                                selectedCustomerId = c['id'] as int?;
+                                              });
+                                              codeC.text = c['code'] ?? '';
+                                              nameC.text = c['name'] ?? '';
+                                            },
+                                            fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                                              // prefill when customer is selected
+                                              if (selectedCustomerId != null) {
+                                                final sel = uniqueCustomers.firstWhere((e) => e['id'] == selectedCustomerId, orElse: () => {});
+                                                if (sel.isNotEmpty) textEditingController.text = '${sel['name'] ?? ''} (${sel['code'] ?? ''})';
+                                              }
+                                              return TextField(
+                                                controller: textEditingController,
+                                                focusNode: focusNode,
+                                                decoration: const InputDecoration(labelText: 'Customer (ketik untuk cari)'),
+                                              );
+                                            },
+                                          ),
+
+                                        const SizedBox(height: 8),
+                                        RadioListTile<int>(
+                                          value: 1,
+                                          groupValue: selectedMode,
+                                          onChanged: (v) => setState(() => selectedMode = v ?? 1),
+                                          title: const Text('Input kode & nama baru (opsional)'),
+                                          subtitle: const Text('Buat customer baru jika belum ada'),
+                                        ),
+                                        if (selectedMode == 1)
+                                          Column(children: [
+                                            TextField(controller: codeC, decoration: const InputDecoration(labelText: 'Kode Pembeli')), 
+                                            const SizedBox(height: 6),
+                                            TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Nama Pembeli')),
+                                          ])
+                                        else
+                                          // show read-only fields when existing selected to avoid confusion
+                                          Column(children: [
+                                            TextField(controller: codeC, decoration: const InputDecoration(labelText: 'Kode Pembeli (otomatis)'), enabled: false),
+                                            const SizedBox(height: 6),
+                                            TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Nama Pembeli (otomatis)'), enabled: false),
+                                          ]),
+                                      ]),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
+                                        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Simpan')),
+                                      ],
+                                    );
+                                  }),
                                 ) ??
                                 false;
                             if (!ok) return;
                             try {
-                              await s.checkout(
-                                buyer: nameC.text.isEmpty ? null : nameC.text,
-                                buyerCode: codeC.text.isEmpty ? null : codeC.text,
-                                buyerName: nameC.text.isEmpty ? null : nameC.text,
-                              );
+                              int? finalCustomerId;
+                              if (selectedMode == 0) {
+                                finalCustomerId = selectedCustomerId;
+                              } else {
+                                final code = codeC.text.trim();
+                                final name = nameC.text.trim();
+                                if (code.isNotEmpty && name.isNotEmpty) {
+                                  finalCustomerId = await s.repo.addOrUpdateCustomer(code, name);
+                                }
+                              }
+                              await s.checkout(customerId: finalCustomerId);
                               if (context.mounted) {
                                 showAppSnackBar(context, 'Transaksi tersimpan');
                               }
@@ -449,6 +534,166 @@ class SalesOfDayPage extends StatefulWidget {
   State<SalesOfDayPage> createState() => _SalesOfDayPageState();
 }
 
+class CustomersPage extends StatefulWidget {
+  const CustomersPage({super.key});
+  @override
+  State<CustomersPage> createState() => _CustomersPageState();
+}
+
+class _CustomersPageState extends State<CustomersPage> {
+  late Future<List<Map<String, dynamic>>> _future;
+
+  void _load() {
+    _future = context.read<AppState>().repo.getCustomers();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = context.read<AppState>().repo;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Manajemen Customer'), actions: [
+        IconButton(
+          icon: const Icon(Icons.upload_file),
+          onPressed: () async {
+            final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
+            if (res != null && res.files.isNotEmpty) {
+              final ok = await showDialog<bool>(context: context, builder: (_)=>AlertDialog(
+                title: const Text('Konfirmasi Impor'),
+                content: const Text('Impor CSV akan menimpa customer yang kode-nya sama. Lanjutkan?'),
+                actions: [TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
+                          FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Lanjut'))],
+              )) ?? false;
+              if (!ok) return;
+              try {
+                final n = await repo.importCustomersCsv(res.files.single.path!);
+                setState(_load);
+                if (context.mounted) showAppSnackBar(context, 'Impor selesai: $n customer');
+              } catch (e) {
+                if (context.mounted) showAppSnackBar(context, 'Impor gagal: $e');
+              }
+            }
+          },
+        ),
+      ]),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _future,
+        builder: (_, snap) {
+          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          final rows = snap.data!;
+          return ListView.separated(
+            itemCount: rows.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, i) {
+              final r = rows[i];
+              return ListTile(
+                title: Text(r['name'] ?? ''),
+                subtitle: Text(r['code'] ?? ''),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit),
+                    onPressed: () async {
+                      final codeC = TextEditingController(text: r['code'] ?? '');
+                      final nameC = TextEditingController(text: r['name'] ?? '');
+                      final ok = await showDialog<bool>(context: context, builder: (_)=>AlertDialog(
+                        title: const Text('Edit Customer'),
+                        content: Column(mainAxisSize: MainAxisSize.min, children: [
+                          TextField(controller: codeC, decoration: const InputDecoration(labelText: 'Kode')),
+                          TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Nama')),
+                        ]),
+                        actions: [TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
+                                  FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Simpan'))],
+                      ));
+                      if (ok == true) {
+                        final newCode = codeC.text.trim();
+                        final newName = nameC.text.trim();
+                        if (newCode.isEmpty) {
+                          if (context.mounted) showAppSnackBar(context, 'Kode tidak boleh kosong');
+                          return;
+                        }
+                        if (newCode != (r['code'] ?? '')) {
+                          final existing = await repo.getCustomerByCode(newCode);
+                          if (existing != null) {
+                            final rep = await showDialog<bool>(context: context, builder: (_)=>AlertDialog(
+                              title: const Text('Konfirmasi'),
+                              content: Text('Kode $newCode sudah ada. Ganti data customer?'),
+                              actions: [TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
+                                        FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Ganti'))],
+                            )) ?? false;
+                            if (!rep) return;
+                          }
+                        }
+                        await repo.addOrUpdateCustomer(newCode, newName);
+                        setState(_load);
+                        if (context.mounted) showAppSnackBar(context, 'Customer disimpan');
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: () async {
+                      final ok = await showDialog<bool>(context: context, builder: (_)=>AlertDialog(
+                        title: const Text('Hapus Customer?'),
+                        content: Text('Hapus ${r['name'] ?? ''}?'),
+                        actions: [TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
+                                  FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Hapus'))],
+                      )) ?? false;
+                      if (!ok) return;
+                      await repo.deleteCustomerById(r['id'] as int);
+                      setState(_load);
+                    },
+                  ),
+                ]),
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final codeC = TextEditingController();
+          final nameC = TextEditingController();
+          final ok = await showDialog<bool>(context: context, builder: (_)=>AlertDialog(
+            title: const Text('Tambah Customer'),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: codeC, decoration: const InputDecoration(labelText: 'Kode')),
+              TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Nama')),
+            ]),
+            actions: [TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
+                      FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Simpan'))],
+          ));
+          if (ok == true) {
+            final code = codeC.text.trim();
+            final name = nameC.text.trim();
+            if (code.isEmpty) {
+              if (context.mounted) showAppSnackBar(context, 'Kode tidak boleh kosong');
+              return;
+            }
+            final existing = await repo.getCustomerByCode(code);
+            if (existing != null) {
+              final rep = await showDialog<bool>(context: context, builder: (_)=>AlertDialog(
+                title: const Text('Konfirmasi'),
+                content: Text('Kode $code sudah ada. Ganti data customer?'),
+                actions: [TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
+                          FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Ganti'))],
+              )) ?? false;
+              if (!rep) return;
+            }
+            await repo.addOrUpdateCustomer(code, name);
+            setState(_load);
+          }
+        },
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
 class _SalesOfDayPageState extends State<SalesOfDayPage> {
   late Future<List<Map<String, dynamic>>> _future;
 
@@ -479,58 +724,99 @@ class _SalesOfDayPageState extends State<SalesOfDayPage> {
               final s = rows[i];
               final dt = DateTime.parse(s['created_at']).toLocal();
               final time = '${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
-              final buyerName = (s['buyer'] as String?) ?? '';
-              final buyerCode = (s['buyer_code'] as String?) ?? '';
+              final customerName = (s['customer_name'] as String?) ?? '';
+              final customerCode = (s['customer_code'] as String?) ?? '';
               return ListTile(
                 title: Text(idr(s['total'])),
                 subtitle: Text(time),
-                trailing: (buyerName.isNotEmpty || buyerCode.isNotEmpty)
+        trailing: (customerName.isNotEmpty || customerCode.isNotEmpty)
                     ? Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          if (buyerCode.isNotEmpty) Text(buyerCode, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                          if (buyerName.isNotEmpty) Text(buyerName, style: const TextStyle(fontSize: 12)),
+                          if (customerCode.isNotEmpty) Text(customerCode, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                          if (customerName.isNotEmpty) Text(customerName, style: const TextStyle(fontSize: 12)),
                         ],
                       )
                     : null,
                 onTap: () async {
                   final items = await repo.getSaleItems(s['id'] as int);
-                  final buyerTextController = TextEditingController(text: (s['buyer'] as String?) ?? '');
-                  final buyerCodeController = TextEditingController(text: (s['buyer_code'] as String?) ?? '');
-                  // ignore: use_build_context_synchronously
-                  final saved = await showDialog<bool>(context: context, builder: (_)=>AlertDialog(
-                    title: const Text('Detail Transaksi'),
-                    content: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextField(controller: buyerCodeController, decoration: const InputDecoration(labelText: 'Kode Pembeli (opsional)')),
-                          TextField(controller: buyerTextController, decoration: const InputDecoration(labelText: 'Nama Pembeli (opsional)')),
-                          const SizedBox(height: 12),
-                          ...items.map((it)=>ListTile(
-                            dense: true,
-                            title: Text(it['name'] as String),
-                            trailing: Text('${it['qty']} x ${idr(it['price'])}'),
-                          )).toList(),
-                        ],
-                      ),
-                    ),
-                    actions: [
-                      TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Tutup')),
-                      FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Simpan')),
-                    ],
-                  ));
-                  if (saved == true) {
-                    final code = buyerCodeController.text.isEmpty ? null : buyerCodeController.text;
-                    final name = buyerTextController.text.isEmpty ? null : buyerTextController.text;
-                    if (code != null && name != null) {
-                      await repo.addOrUpdateBuyer(code, name);
+                  // load customers for selection
+                  final int? initialCustomerId = (s['customer_id'] is int) ? s['customer_id'] as int : null;
+                  final customers = await repo.getCustomers();
+                  final _seen2 = <int>{};
+                  final uniqueCustomers2 = <Map<String,dynamic>>[];
+                  for (final c in customers) {
+                    final id = c['id'] as int?;
+                    if (id == null) continue;
+                    if (_seen2.add(id)) uniqueCustomers2.add(c);
+                  }
+                  // If the sale references a customer id not in the list, try to fetch it and prepend
+                  if (initialCustomerId != null && !uniqueCustomers2.any((e) => e['id'] == initialCustomerId)) {
+                    final missing = await repo.getCustomerById(initialCustomerId);
+                    if (missing != null) {
+                      uniqueCustomers2.insert(0, missing);
+                    } else {
+                      uniqueCustomers2.insert(0, {'id': initialCustomerId, 'code': 'unknown', 'name': 'Customer #${initialCustomerId} (tidak ditemukan)'});
                     }
-                    await repo.updateSaleBuyer(s['id'] as int, buyer: name, buyerCode: code);
+                    _seen2.add(initialCustomerId);
+                  }
+                  // ignore: use_build_context_synchronously
+                  int? chosenCustomerId = initialCustomerId;
+                  final saved = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => StatefulBuilder(builder: (context, setState) {
+                      return AlertDialog(
+                        title: const Text('Detail Transaksi'),
+                        content: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Autocomplete<Map<String, dynamic>>(
+                                displayStringForOption: (c) => '${c['name'] ?? ''} (${c['code']})',
+                                optionsBuilder: (TextEditingValue txt) {
+                                  final q = txt.text.trim().toLowerCase();
+                                  if (q.isEmpty) return uniqueCustomers2;
+                                  return uniqueCustomers2.where((c) {
+                                    final name = (c['name'] as String?)?.toLowerCase() ?? '';
+                                    final code = (c['code'] as String?)?.toLowerCase() ?? '';
+                                    return name.contains(q) || code.contains(q);
+                                  }).toList();
+                                },
+                                onSelected: (c) => setState(() => chosenCustomerId = c['id'] as int?),
+                                fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                                  if (chosenCustomerId != null) {
+                                    final sel = uniqueCustomers2.firstWhere((e) => e['id'] == chosenCustomerId, orElse: () => {});
+                                    if (sel.isNotEmpty) textEditingController.text = '${sel['name'] ?? ''} (${sel['code'] ?? ''})';
+                                  }
+                                  return TextField(
+                                    controller: textEditingController,
+                                    focusNode: focusNode,
+                                    decoration: const InputDecoration(labelText: 'Customer (ketik untuk cari)'),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              ...items.map((it)=>ListTile(
+                                dense: true,
+                                title: Text(it['name'] as String),
+                                trailing: Text('${it['qty']} x ${idr(it['price'])}'),
+                              )).toList(),
+                            ],
+                          ),
+                        ),
+                        actions: [
+                          TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Tutup')),
+                          FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Simpan')),
+                        ],
+                      );
+                    }),
+                  );
+                  if (saved == true) {
+                    await repo.updateSaleCustomer(s['id'] as int, customerId: chosenCustomerId);
                     // reload list
                     setState(_load);
-                    if (context.mounted) showAppSnackBar(context, 'Data pembeli disimpan');
+                    if (context.mounted) showAppSnackBar(context, 'Data customer disimpan');
                   }
                 },
               );

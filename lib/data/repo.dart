@@ -48,7 +48,7 @@ class Repo {
   }
 
   /// Transaksi
-  Future<void> createSale(List<CartItem> items, {String? buyer, String? buyerCode}) async {
+  Future<void> createSale(List<CartItem> items, {int? customerId}) async {
     final d = await _db.db;
     await d.transaction((txn) async {
       // Validasi stok
@@ -65,8 +65,7 @@ class Repo {
       final saleId = await txn.insert('sales', {
         'created_at': DateTime.now().toIso8601String(),
         'total': total,
-        'buyer': buyer,
-        'buyer_code': buyerCode,
+        'customer_id': customerId,
       });
 
       for (final it in items) {
@@ -85,21 +84,70 @@ class Repo {
     });
   }
 
-  // Buyers table helpers
-  Future<void> addOrUpdateBuyer(String code, String name) async {
+  // (buyers helpers removed — use customers instead)
+
+  // Customers table helpers (id primary key, code unique)
+  Future<int> addOrUpdateCustomer(String code, String name) async {
     final d = await _db.db;
-    await d.insert('buyers', {'code': code, 'name': name}, conflictAlgorithm: ConflictAlgorithm.replace);
+    final rows = await d.query('customers', where: 'code=?', whereArgs: [code], limit: 1);
+    if (rows.isNotEmpty) {
+      final id = rows.first['id'] as int;
+      await d.update('customers', {'code': code, 'name': name}, where: 'id=?', whereArgs: [id]);
+      return id;
+    }
+    return await d.insert('customers', {'code': code, 'name': name});
   }
 
-  Future<Map<String, dynamic>?> getBuyer(String code) async {
+  Future<Map<String, dynamic>?> getCustomerByCode(String code) async {
     final d = await _db.db;
-    final rows = await d.query('buyers', where: 'code=?', whereArgs: [code], limit: 1);
+    final rows = await d.query('customers', where: 'code=?', whereArgs: [code], limit: 1);
     return rows.isEmpty ? null : rows.first;
   }
 
-  Future<List<Map<String, dynamic>>> getBuyers() async {
+  Future<Map<String, dynamic>?> getCustomerById(int id) async {
     final d = await _db.db;
-    return d.query('buyers', orderBy: 'name');
+    final rows = await d.query('customers', where: 'id=?', whereArgs: [id], limit: 1);
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  Future<List<Map<String, dynamic>>> getCustomers() async {
+    final d = await _db.db;
+    return d.query('customers', orderBy: 'name');
+  }
+
+  Future<int> deleteCustomerById(int id) async {
+    final d = await _db.db;
+    return d.delete('customers', where: 'id=?', whereArgs: [id]);
+  }
+
+  /// Import customers from CSV (expects header with 'code' and 'name' or rows with code,name)
+  Future<int> importCustomersCsv(String filePath) async {
+    final f = File(filePath);
+    if (!await f.exists()) throw Exception('File tidak ditemukan: $filePath');
+    final content = await f.readAsString();
+    final rows = const CsvToListConverter().convert(content, shouldParseNumbers: false);
+    if (rows.isEmpty) return 0;
+    final header = rows.first.map((e)=>e.toString().trim().toLowerCase()).toList();
+    final hasHeader = header.contains('code') && header.contains('name');
+    final data = hasHeader ? rows.skip(1) : rows;
+    int count = 0;
+    final d = await _db.db;
+    final batch = d.batch();
+    for (final r in data) {
+      final code = r.isNotEmpty ? r[0].toString().trim() : '';
+      final name = r.length>1 ? r[1].toString().trim() : '';
+      if (code.isEmpty) continue;
+      // If customer with same code exists, update its name; otherwise insert new customer.
+      final existing = await d.query('customers', where: 'code=?', whereArgs: [code], limit: 1);
+      if (existing.isNotEmpty) {
+        batch.update('customers', {'name': name}, where: 'code=?', whereArgs: [code]);
+      } else {
+        batch.insert('customers', {'code': code, 'name': name});
+      }
+      count++;
+    }
+    await batch.commit(noResult: true);
+    return count;
   }
 
   Future<List<Map<String, dynamic>>> getSalesSummaryByDay() async {
@@ -112,7 +160,17 @@ class Repo {
 
   Future<List<Map<String, dynamic>>> getSalesByDay(String day) async {
     final d = await _db.db;
-    return d.rawQuery('SELECT id, created_at, total, buyer, buyer_code FROM sales WHERE substr(created_at,1,10)=? ORDER BY created_at DESC', [day]);
+    // Join customers by id; sales.customer_id is nullable
+    return d.rawQuery('''
+      SELECT s.id, s.created_at, s.total,
+             c.name AS customer_name,
+             c.code AS customer_code,
+             s.customer_id
+      FROM sales s
+      LEFT JOIN customers c ON s.customer_id = c.id
+      WHERE substr(s.created_at,1,10)=?
+      ORDER BY s.created_at DESC
+    ''', [day]);
   }
 
   Future<List<Map<String, dynamic>>> getSaleItems(int saleId) async {
@@ -124,11 +182,10 @@ class Repo {
     ''', [saleId]);
   }
 
-  Future<void> updateSaleBuyer(int saleId, {String? buyer, String? buyerCode}) async {
+  Future<void> updateSaleCustomer(int saleId, {int? customerId}) async {
     final d = await _db.db;
     final values = <String, Object?>{};
-    values['buyer'] = buyer;
-    values['buyer_code'] = buyerCode;
+    values['customer_id'] = customerId;
     await d.update('sales', values, where: 'id=?', whereArgs: [saleId]);
   }
 
@@ -155,7 +212,11 @@ class Repo {
 
   Future<List<String>> exportSalesCsv([String? targetDir]) async {
     final d = await _db.db;
-    final sales = await d.query('sales', orderBy: 'created_at DESC');
+    final sales = await d.rawQuery('''
+      SELECT s.id, s.created_at, s.total, c.name AS customer_name, c.code AS customer_code, s.customer_id
+      FROM sales s LEFT JOIN customers c ON s.customer_id = c.id
+      ORDER BY s.created_at DESC
+    ''');
     final items = await d.rawQuery('''
       SELECT si.sale_id, si.product_id, p.name, si.qty, si.price
       FROM sale_items si JOIN products p ON p.id = si.product_id
@@ -163,8 +224,8 @@ class Repo {
     ''');
 
     final csvSales = const ListToCsvConverter().convert([
-      ['id','created_at','total','buyer'],
-      ...sales.map((s)=>[s['id'], s['created_at'], s['total'], s['buyer']])
+      ['id','created_at','total','customer_id','customer_code','customer_name'],
+      ...sales.map((s)=>[s['id'], s['created_at'], s['total'], s['customer_id'], s['customer_code'], s['customer_name']])
     ]);
 
     final csvItems = const ListToCsvConverter().convert([
