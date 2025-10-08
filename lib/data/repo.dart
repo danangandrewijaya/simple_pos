@@ -205,7 +205,9 @@ class Repo {
       ...rows.map((r)=>[r['id'], r['name'], r['sku'], r['price'], r['stock']])
     ]);
     final path = targetDir ?? await _docsPath();
-    final file = File('$path/products.csv');
+    final now = DateTime.now();
+    final ts = '${now.year}${now.month.toString().padLeft(2,'0')}${now.day.toString().padLeft(2,'0')}_${now.hour.toString().padLeft(2,'0')}${now.minute.toString().padLeft(2,'0')}${now.second.toString().padLeft(2,'0')}';
+    final file = File('$path/products_$ts.csv');
     await file.writeAsString(csv);
     return file.path;
   }
@@ -234,13 +236,15 @@ class Repo {
     ]);
 
   final path = targetDir ?? await _docsPath();
-  final f1 = File('$path/sales.csv');
-    await f1.writeAsString(csvSales);
+  final now = DateTime.now();
+  final ts = '${now.year}${now.month.toString().padLeft(2,'0')}${now.day.toString().padLeft(2,'0')}_${now.hour.toString().padLeft(2,'0')}${now.minute.toString().padLeft(2,'0')}${now.second.toString().padLeft(2,'0')}';
+  final f1 = File('$path/sales_$ts.csv');
+  await f1.writeAsString(csvSales);
 
-  final f2 = File('$path/sale_items.csv');
-    await f2.writeAsString(csvItems);
+  final f2 = File('$path/sale_items_$ts.csv');
+  await f2.writeAsString(csvItems);
 
-    return [f1.path, f2.path];
+  return [f1.path, f2.path];
   }
 
   /// Import produk dari CSV

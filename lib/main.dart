@@ -57,7 +57,6 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
-          if (idx == 0) const ProductsActions(),
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Pengaturan',
@@ -69,10 +68,130 @@ class _HomePageState extends State<HomePage> {
       ),
       body: pages[idx],
       floatingActionButton: idx == 0
-          ? FloatingActionButton.extended(
-              onPressed: () => showDialog(context: context, builder: (_) => const AddProductDialog()),
-              icon: const Icon(Icons.add),
-              label: const Text('Tambah Produk'),
+          ? SizedBox(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FloatingActionButton.extended(
+                    onPressed: () => showDialog(context: context, builder: (_) => const AddProductDialog()),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Tambah Produk'),
+                  ),
+                  const SizedBox(width: 12),
+                  // export/import small FAB
+                  PopupMenuButton<String>(
+                    onSelected: (v) async {
+                      final repo = context.read<AppState>().repo;
+                      // Show progress indicator
+                      Future<void> showProgress(String msg) async {
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) => AlertDialog(
+                            content: Row(children: [
+                              const CircularProgressIndicator(),
+                              const SizedBox(width: 16),
+                              Expanded(child: Text(msg)),
+                            ]),
+                          ),
+                        );
+                      }
+                      void hideProgress() {
+                        Navigator.of(context, rootNavigator: true).pop();
+                      }
+                      if (v == 'export_products') {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Konfirmasi Ekspor'),
+                            content: const Text('Ekspor data produk ke file CSV?'),
+                            actions: [
+                              TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
+                              FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Ekspor')),
+                            ],
+                          ),
+                        ) ?? false;
+                        if (!ok) return;
+                        await showProgress('Mengekspor produk...');
+                        try {
+                          String? dir = await FilePicker.platform.getDirectoryPath();
+                          final path = await repo.exportProductsCsv(dir);
+                          if (context.mounted) showAppSnackBar(context, 'Produk diekspor ke: $path');
+                        } catch (e) {
+                          if (context.mounted) showAppSnackBar(context, 'Gagal ekspor: $e');
+                        } finally {
+                          hideProgress();
+                        }
+                      } else if (v == 'export_sales') {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Konfirmasi Ekspor'),
+                            content: const Text('Ekspor data transaksi ke file CSV?'),
+                            actions: [
+                              TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
+                              FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Ekspor')),
+                            ],
+                          ),
+                        ) ?? false;
+                        if (!ok) return;
+                        await showProgress('Mengekspor transaksi...');
+                        try {
+                          String? dir = await FilePicker.platform.getDirectoryPath();
+                          final paths = await repo.exportSalesCsv(dir);
+                          if (context.mounted) showAppSnackBar(context, 'Transaksi diekspor ke: ${paths.join(', ')}');
+                        } catch (e) {
+                          if (context.mounted) showAppSnackBar(context, 'Gagal ekspor: $e');
+                        } finally {
+                          hideProgress();
+                        }
+                      } else if (v == 'import_products') {
+                        final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['csv']);
+                        if (res!=null && res.files.isNotEmpty) {
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: const Text('Konfirmasi Impor'),
+                              content: const Text('Impor produk dari file CSV? Data dengan SKU sama akan ditimpa.'),
+                              actions: [
+                                TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
+                                FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Impor')),
+                              ],
+                            ),
+                          ) ?? false;
+                          if (!ok) return;
+                          await showProgress('Mengimpor produk...');
+                          try {
+                            final filePath = res.files.single.path!;
+                            final n = await context.read<AppState>().repo.importProductsCsv(filePath);
+                            await context.read<AppState>().loadProducts();
+                            if (context.mounted) showAppSnackBar(context, 'Impor selesai: $n produk');
+                          } catch (e) {
+                            if (context.mounted) showAppSnackBar(context, 'Gagal impor: $e');
+                          } finally {
+                            hideProgress();
+                          }
+                        }
+                      }
+                    },
+                    itemBuilder: (c) => const [
+                      PopupMenuItem(value: 'export_products', child: Text('Ekspor CSV - Produk')),
+                      PopupMenuItem(value: 'export_sales', child: Text('Ekspor CSV - Transaksi')),
+                      PopupMenuItem(value: 'import_products', child: Text('Impor CSV - Produk')),
+                    ],
+                    child: Row(
+                      children: [
+                        FloatingActionButton.small(
+                          onPressed: null,
+                          tooltip: 'Ekspor / Impor',
+                          child: const Icon(Icons.swap_horiz),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -120,15 +239,12 @@ class ProductsActions extends StatelessWidget {
                 showAppSnackBar(context, 'Impor selesai: $n produk');
               }
             }
-          } else if (v == 'manage_customers') {
-            Navigator.push(context, MaterialPageRoute(builder: (_)=>const CustomersPage()));
           }
         },
         itemBuilder: (c)=>const [
           PopupMenuItem(value:'export_products', child: Text('Ekspor CSV - Produk')),
           PopupMenuItem(value:'export_sales', child: Text('Ekspor CSV - Transaksi')),
           PopupMenuItem(value:'import_products', child: Text('Impor CSV - Produk')),
-          PopupMenuItem(value:'manage_customers', child: Text('Manajemen Customer')),
         ],
       ),
     ]);
@@ -611,6 +727,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 if (context.mounted) showAppSnackBar(context, 'Judul direset');
               }, child: const Text('Reset')),
             ]),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_)=>const CustomersPage())),
+              icon: const Icon(Icons.people),
+              label: const Text('Manajemen Customer'),
+            ),
           ],
         ),
       ),
