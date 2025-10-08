@@ -1,4 +1,4 @@
-package com.example.simple_pos
+package dev.kamaya.simplepos
 
 import io.flutter.embedding.android.FlutterActivity
 
