@@ -43,7 +43,19 @@ class _HomePageState extends State<HomePage> {
     final pages = [const ProductsPage(), const CartPage(), const SummaryPage()];
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.select((AppState s) => s.appTitle)),
+        title: Row(
+          children: [
+            // Use the app icon asset here so the in-app header matches the launcher icon
+            Image.asset(
+              'assets/app_icon.png',
+              width: 28,
+              height: 28,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 8),
+            Text(context.select((AppState s) => s.appTitle)),
+          ],
+        ),
         actions: [
           if (idx == 0) const ProductsActions(),
           IconButton(
