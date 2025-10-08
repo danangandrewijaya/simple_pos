@@ -12,7 +12,7 @@ class AppState with ChangeNotifier {
   bool lowStockOnly = false;
   int lowStockThreshold = 5;
   String query = '';
-  String appTitle = 'Simple POS';
+  String appTitle = 'Tukonin';
 
   static const _prefTitleKey = 'app_title';
 

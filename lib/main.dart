@@ -601,13 +601,13 @@ class _SettingsPageState extends State<SettingsPage> {
             Row(children: [
               FilledButton(onPressed: () async {
                 final newTitle = _titleC.text.trim();
-                await s.saveTitle(newTitle.isEmpty ? 'Simple POS' : newTitle);
+                await s.saveTitle(newTitle.isEmpty ? 'Tukonin' : newTitle);
                 if (context.mounted) showAppSnackBar(context, 'Judul disimpan');
               }, child: const Text('Simpan')),
               const SizedBox(width: 12),
               OutlinedButton(onPressed: () async {
-                _titleC.text = 'Simple POS';
-                await s.saveTitle('Simple POS');
+                _titleC.text = 'Tukonin';
+                await s.saveTitle('Tukonin');
                 if (context.mounted) showAppSnackBar(context, 'Judul direset');
               }, child: const Text('Reset')),
             ]),
