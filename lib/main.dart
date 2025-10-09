@@ -19,6 +19,7 @@ void main() {
   );
 }
 
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
@@ -26,7 +27,71 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: context.watch<AppState>().appTitle,
       theme: ThemeData(useMaterial3: true),
-      home: const HomePage(),
+      home: const SplashScreen(),
+    );
+  }
+}
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appTitle = context.watch<AppState>().appTitle;
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/app_icon.png',
+              width: 120,
+              height: 120,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Tukonin',
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (appTitle != 'Tukonin') ...[
+              const SizedBox(height: 6),
+              Text(
+                appTitle,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+            const SizedBox(height: 128),
+            const CircularProgressIndicator(),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -54,7 +119,14 @@ class _HomePageState extends State<HomePage> {
               fit: BoxFit.contain,
             ),
             const SizedBox(width: 8),
-            Text(context.select((AppState s) => s.appTitle)),
+            Text(
+              context.select((AppState s) => s.appTitle),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
           ],
         ),
         actions: [
@@ -713,7 +785,15 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             const Text('Judul Aplikasi', style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            TextField(controller: _titleC, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'Masukkan judul aplikasi')),
+            TextField(
+              controller: _titleC,
+              maxLength: 30,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'Masukkan judul aplikasi',
+                counterText: '',
+              ),
+            ),
             const SizedBox(height: 12),
             Row(children: [
               FilledButton(onPressed: () async {

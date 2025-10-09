@@ -23,7 +23,12 @@ class AppState with ChangeNotifier {
     notifyListeners();
   }
 
+  static const int maxTitleLength = 30;
   Future<void> saveTitle(String title) async {
+    // Batasi jumlah karakter judul aplikasi
+    if (title.length > maxTitleLength) {
+      title = title.substring(0, maxTitleLength);
+    }
     appTitle = title;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefTitleKey, title);
