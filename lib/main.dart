@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'data/models.dart';
 import 'data/money.dart';
 import 'state/app_state.dart';
+import 'ui/receipt.dart';
 import 'ui/snackbars.dart';
 
 void main() {
@@ -930,24 +931,21 @@ class _SalesOfDayPageState extends State<SalesOfDayPage> {
               final s = rows[i];
               final dt = DateTime.parse(s['created_at']).toLocal();
               final time = '${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
-              final customerName = (s['customer_name'] as String?) ?? '';
-              final customerCode = (s['customer_code'] as String?) ?? '';
               return ListTile(
                 title: Text(idr(s['total'])),
                 subtitle: Text(time),
-        trailing: (customerName.isNotEmpty || customerCode.isNotEmpty)
-                    ? Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (customerCode.isNotEmpty) Text(customerCode, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                          if (customerName.isNotEmpty) Text(customerName, style: const TextStyle(fontSize: 12)),
-                        ],
-                      )
-                    : null,
+                trailing: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if ((s['customer_code'] as String?)?.isNotEmpty ?? false)
+                      Text('${s['customer_code']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    if ((s['customer_name'] as String?)?.isNotEmpty ?? false)
+                      Text('${s['customer_name']}', style: const TextStyle(fontSize: 12)),
+                  ],
+                ),
                 onTap: () async {
                   final items = await repo.getSaleItems(s['id'] as int);
-                  // load customers for selection
                   final int? initialCustomerId = (s['customer_id'] is int) ? s['customer_id'] as int : null;
                   final customers = await repo.getCustomers();
                   final _seen2 = <int>{};
@@ -957,7 +955,6 @@ class _SalesOfDayPageState extends State<SalesOfDayPage> {
                     if (id == null) continue;
                     if (_seen2.add(id)) uniqueCustomers2.add(c);
                   }
-                  // If the sale references a customer id not in the list, try to fetch it and prepend
                   if (initialCustomerId != null && !uniqueCustomers2.any((e) => e['id'] == initialCustomerId)) {
                     final missing = await repo.getCustomerById(initialCustomerId);
                     if (missing != null) {
@@ -967,63 +964,161 @@ class _SalesOfDayPageState extends State<SalesOfDayPage> {
                     }
                     _seen2.add(initialCustomerId);
                   }
-                  // ignore: use_build_context_synchronously
                   int? chosenCustomerId = initialCustomerId;
-                  final saved = await showDialog<bool>(
+                  await showDialog(
                     context: context,
-                    builder: (_) => StatefulBuilder(builder: (context, setState) {
+                    builder: (context) {
                       return AlertDialog(
-                        title: const Text('Detail Transaksi'),
+                        contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
                         content: SingleChildScrollView(
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Autocomplete<Map<String, dynamic>>(
-                                displayStringForOption: (c) => '${c['name'] ?? ''} (${c['code']})',
-                                optionsBuilder: (TextEditingValue txt) {
-                                  final q = txt.text.trim().toLowerCase();
-                                  if (q.isEmpty) return uniqueCustomers2;
-                                  return uniqueCustomers2.where((c) {
-                                    final name = (c['name'] as String?)?.toLowerCase() ?? '';
-                                    final code = (c['code'] as String?)?.toLowerCase() ?? '';
-                                    return name.contains(q) || code.contains(q);
-                                  }).toList();
-                                },
-                                onSelected: (c) => setState(() => chosenCustomerId = c['id'] as int?),
-                                fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-                                  if (chosenCustomerId != null) {
-                                    final sel = uniqueCustomers2.firstWhere((e) => e['id'] == chosenCustomerId, orElse: () => {});
-                                    if (sel.isNotEmpty) textEditingController.text = '${sel['name'] ?? ''} (${sel['code'] ?? ''})';
-                                  }
-                                  return TextField(
-                                    controller: textEditingController,
-                                    focusNode: focusNode,
-                                    decoration: const InputDecoration(labelText: 'Customer (ketik untuk cari)'),
-                                  );
-                                },
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                child: Card(
+                                  elevation: 2,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  margin: EdgeInsets.zero,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Detail Transaksi', style: Theme.of(context).textTheme.titleMedium),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text('Waktu:', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                            Text('${dt.day.toString().padLeft(2,'0')}-${dt.month.toString().padLeft(2,'0')}-${dt.year} ${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}'),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text('Customer:', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                            Text((s['customer_name'] ?? '') + ((s['customer_code'] != null && (s['customer_code'] as String).isNotEmpty) ? ' (${s['customer_code']})' : '')),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text('Total:', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                            Text(idr(s['total'])),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Text('Item:', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                        ...items.map<Widget>((it) => Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Expanded(child: Text('${it['name']} x${it['qty']}')),
+                                            Text(idr(it['price'] * it['qty'])),
+                                          ],
+                                        )),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ),
-                              const SizedBox(height: 12),
-                              ...items.map((it)=>ListTile(
-                                dense: true,
-                                title: Text(it['name'] as String),
-                                trailing: Text('${it['qty']} x ${idr(it['price'])}'),
-                              )).toList(),
+                              const SizedBox(height: 16),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    ElevatedButton.icon(
+                                      icon: const Icon(Icons.edit),
+                                      label: const Text('Edit Customer'),
+                                      onPressed: () async {
+                                        final saved = await showDialog<bool>(
+                                          context: context,
+                                          builder: (_) => StatefulBuilder(builder: (context, setState) {
+                                            return AlertDialog(
+                                              title: const Text('Edit Customer'),
+                                              content: Autocomplete<Map<String, dynamic>>(
+                                                displayStringForOption: (c) => '${c['name'] ?? ''} (${c['code']})',
+                                                optionsBuilder: (TextEditingValue txt) {
+                                                  final q = txt.text.trim().toLowerCase();
+                                                  if (q.isEmpty) return uniqueCustomers2;
+                                                  return uniqueCustomers2.where((c) {
+                                                    final name = (c['name'] as String?)?.toLowerCase() ?? '';
+                                                    final code = (c['code'] as String?)?.toLowerCase() ?? '';
+                                                    return name.contains(q) || code.contains(q);
+                                                  }).toList();
+                                                },
+                                                onSelected: (c) => setState(() => chosenCustomerId = c['id'] as int?),
+                                                fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                                                  if (chosenCustomerId != null) {
+                                                    final sel = uniqueCustomers2.firstWhere((e) => e['id'] == chosenCustomerId, orElse: () => {});
+                                                    if (sel.isNotEmpty) textEditingController.text = '${sel['name'] ?? ''} (${sel['code'] ?? ''})';
+                                                  }
+                                                  return TextField(
+                                                    controller: textEditingController,
+                                                    focusNode: focusNode,
+                                                    decoration: const InputDecoration(labelText: 'Customer (ketik untuk cari)'),
+                                                  );
+                                                },
+                                              ),
+                                              actions: [
+                                                TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Batal')),
+                                                FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Simpan')),
+                                              ],
+                                            );
+                                          }),
+                                        );
+                                        if (saved == true) {
+                                          await repo.updateSaleCustomer(s['id'] as int, customerId: chosenCustomerId);
+                                          setState(_load);
+                                          if (context.mounted) showAppSnackBar(context, 'Data customer disimpan');
+                                          Navigator.pop(context); // close detail dialog
+                                        }
+                                      },
+                                    ),
+                                    ElevatedButton.icon(
+                                      icon: const Icon(Icons.receipt_long),
+                                      label: const Text('Nota'),
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        Navigator.push(context, MaterialPageRoute(
+                                          builder: (_) => ReceiptPage(
+                                            cartItems: items.map((it) => CartItem(
+                                              Product(
+                                                id: it['product_id'],
+                                                name: it['name'],
+                                                price: it['price'],
+                                                stock: 0,
+                                                sku: '',
+                                              ),
+                                              it['qty'],
+                                            )).toList(),
+                                            totalAmount: s['total'],
+                                            customerName: s['customer_name'],
+                                            date: dt,
+                                          ),
+                                        ));
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
                             ],
                           ),
                         ),
                         actions: [
-                          TextButton(onPressed: ()=>Navigator.pop(context, false), child: const Text('Tutup')),
-                          FilledButton(onPressed: ()=>Navigator.pop(context, true), child: const Text('Simpan')),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Tutup'),
+                          ),
                         ],
                       );
-                    }),
+                    },
                   );
-                  if (saved == true) {
-                    await repo.updateSaleCustomer(s['id'] as int, customerId: chosenCustomerId);
-                    // reload list
-                    setState(_load);
-                    if (context.mounted) showAppSnackBar(context, 'Data customer disimpan');
-                  }
                 },
               );
             },
