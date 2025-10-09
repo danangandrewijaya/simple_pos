@@ -6,9 +6,11 @@ import '../data/models.dart';
 import '../data/repo.dart';
 
 class AppState with ChangeNotifier {
+
   final repo = Repo();
   List<Product> products = [];
   List<CartItem> cart = [];
+  List<CartItem>? cartBackup;
   bool lowStockOnly = false;
   int lowStockThreshold = 5;
   String query = '';
@@ -91,8 +93,9 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> checkout({int? customerId, String? customerCode, String? customerName}) async {
-    cart.removeWhere((c) => c.qty <= 0);
-    if (cart.isEmpty) return;
+  cart.removeWhere((c) => c.qty <= 0);
+  if (cart.isEmpty) return;
+  cartBackup = cart.map((c) => CartItem(c.product, c.qty)).toList();
     // If customerCode provided and customerName non-empty, store/update customer
     if (customerCode != null && customerCode.isNotEmpty && customerName != null && customerName.isNotEmpty) {
       // ensure customer exists and get id

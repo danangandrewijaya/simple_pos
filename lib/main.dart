@@ -698,6 +698,28 @@ class CartPage extends StatelessWidget {
                               await s.checkout(customerId: finalCustomerId);
                               if (context.mounted) {
                                 showAppSnackBar(context, 'Transaksi tersimpan');
+                                // Tampilkan receipt langsung setelah checkout
+                                if (s.cartBackup?.isNotEmpty == true) {
+                                  final cartItems = (s.cartBackup ?? []).map((it) => CartItem(
+                                    Product(
+                                      id: it.product.id,
+                                      name: it.product.name,
+                                      price: it.product.price,
+                                      stock: it.product.stock,
+                                      sku: it.product.sku ?? '',
+                                    ),
+                                    it.qty,
+                                  )).toList();
+                                  final totalAmount = cartItems.fold<int>(0, (a, it) => a + it.qty * it.product.price);
+                                  Navigator.push(context, MaterialPageRoute(
+                                    builder: (_) => ReceiptPage(
+                                      cartItems: cartItems,
+                                      totalAmount: totalAmount,
+                                      customerName: nameC.text.trim(),
+                                      date: DateTime.now(),
+                                    ),
+                                  ));
+                                }
                               }
                             } catch (e) {
                               if (context.mounted) {
