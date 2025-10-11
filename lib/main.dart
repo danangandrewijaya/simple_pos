@@ -1,16 +1,21 @@
 // lib/main.dart
+import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'data/models.dart';
 import 'data/money.dart';
+import 'data/printer.dart';
 import 'state/app_state.dart';
 import 'ui/receipt.dart';
 import 'ui/snackbars.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   final appState = AppState();
+  // Load saved printer selection safely before runApp (requires binding initialized)
+  try { await PrinterService.I.loadSelectedFromPrefs(appState); } catch (_) {}
   runApp(
     ChangeNotifierProvider(
       create: (_) => appState..loadProducts()..loadSettings(),
@@ -830,6 +835,95 @@ class _SettingsPageState extends State<SettingsPage> {
                 if (context.mounted) showAppSnackBar(context, 'Judul direset');
               }, child: const Text('Reset')),
             ]),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            Text('Printer', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.print, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    s.selectedPrinterName != null
+                        ? '${s.selectedPrinterName} (${s.selectedPrinterAddress ?? '-'})'
+                        : 'Belum ada printer',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton(
+                  onPressed: () async {
+                    // choose from bonded and save
+                    final devices = await PrinterService.I.getBonded();
+                    if (context.mounted) {
+                      BluetoothDevice? chosen;
+                      await showDialog(
+                        context: context,
+                        builder: (_) => StatefulBuilder(
+                          builder: (context, setState) => AlertDialog(
+                            title: const Text('Pilih Printer'),
+                            content: devices.isEmpty
+                                ? const Text('Tidak ada perangkat. Pair di pengaturan Bluetooth dahulu.')
+                                : DropdownButton<BluetoothDevice>(
+                                    isExpanded: true,
+                                    hint: const Text('Pilih perangkat'),
+                                    value: chosen,
+                                    items: devices
+                                        .map((d) => DropdownMenuItem(
+                                              value: d,
+                                              child: Text((d.name ?? d.address ?? 'Unknown').toString()),
+                                            ))
+                                        .toList(),
+                                    onChanged: (v) => setState(() => chosen = v),
+                                  ),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+                              FilledButton(
+                                onPressed: chosen == null
+                                    ? null
+                                    : () async {
+                                        await PrinterService.I.saveSelectedPrinter(
+                                          chosen!.name ?? '',
+                                          chosen!.address ?? '',
+                                          context.read<AppState>(),
+                                        );
+                                        if (context.mounted) Navigator.pop(context);
+                                      },
+                                child: const Text('Simpan'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Ubah'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: () async {
+                    final ok = await PrinterService.I.ensureConnected(context, context.read<AppState>());
+                    if (ok) await PrinterService.I.testPrint(header: 'TEST PRINT');
+                  },
+                  child: const Text('Tes'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: s.selectedPrinterAddress == null
+                    ? null
+                    : () async {
+                        await PrinterService.I.clearSelectedPrinter(context.read<AppState>());
+                      },
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Hapus default printer'),
+              ),
+            ),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_)=>const CustomersPage())),

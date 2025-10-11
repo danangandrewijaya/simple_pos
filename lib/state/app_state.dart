@@ -18,6 +18,9 @@ class AppState with ChangeNotifier {
   int lowStockThreshold = 5;
   String query = '';
   String appTitle = appName;
+  // Printer selection (persisted via SharedPreferences from PrinterService)
+  String? selectedPrinterName;
+  String? selectedPrinterAddress;
 
   static const _prefTitleKey = 'app_title';
 
@@ -25,6 +28,13 @@ class AppState with ChangeNotifier {
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     appTitle = prefs.getString(_prefTitleKey) ?? appTitle;
+    notifyListeners();
+  }
+
+  // Update selected printer and notify listeners
+  void setSelectedPrinter(String? name, String? address) {
+    selectedPrinterName = name;
+    selectedPrinterAddress = address;
     notifyListeners();
   }
 

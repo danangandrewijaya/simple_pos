@@ -1,4 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Bluetooth permissions -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <!-- Android 12+ dynamic Bluetooth permissions -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <!-- Optional: allow discovering unpaired (if needed by plugin); can be omitted if not needed -->
+    <!-- <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" /> -->
+    <!-- Mark bluetooth feature as not required so emulator/devices without BT can still run -->
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
