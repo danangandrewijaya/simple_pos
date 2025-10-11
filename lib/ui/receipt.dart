@@ -37,6 +37,7 @@ class _ReceiptPageState extends State<ReceiptPage> {
       total: widget.totalAmount,
       date: widget.date,
       customerName: widget.customerName,
+      appTitle: s.appTitle,
       title: 'NOTA',
     );
   }

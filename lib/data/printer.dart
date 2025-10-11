@@ -170,12 +170,16 @@ class PrinterService {
     required int total,
     required DateTime date,
     String? customerName,
+    String? appTitle,
     String title = 'NOTA',
   }) async {
     // Header
+    _bt.printCustom(title, 2, 1);
     _bt.printNewLine();
-    _bt.printCustom(title, 3, 1);
-    _bt.printNewLine();
+    if (appTitle != null && appTitle.trim().isNotEmpty) {
+      _bt.printCustom(appTitle.trim(), 3, 1);
+      _bt.printNewLine();
+    }
     final tgl = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     _bt.printCustom('Tanggal: $tgl', 1, 0);
     if (customerName != null && customerName.trim().isNotEmpty) {
@@ -198,7 +202,6 @@ class PrinterService {
     _bt.printCustom(_leftRight('Total', idr(total)), 2, 0);
     _bt.printNewLine();
     _bt.printCustom('Terima kasih', 1, 1);
-    _bt.printNewLine();
     _bt.printNewLine();
     try { _bt.paperCut(); } catch (_) {}
   }
