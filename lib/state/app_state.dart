@@ -1,9 +1,12 @@
+
 // lib/state/app_state.dart
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models.dart';
 import '../data/repo.dart';
+
+const String appName = 'Tukonin';
 
 class AppState with ChangeNotifier {
 
@@ -14,7 +17,7 @@ class AppState with ChangeNotifier {
   bool lowStockOnly = false;
   int lowStockThreshold = 5;
   String query = '';
-  String appTitle = 'Tukonin';
+  String appTitle = appName;
 
   static const _prefTitleKey = 'app_title';
 

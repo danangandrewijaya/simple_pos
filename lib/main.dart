@@ -25,7 +25,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: context.watch<AppState>().appTitle,
+      title: "$appName " + context.watch<AppState>().appTitle,
       theme: ThemeData(useMaterial3: true),
       home: const SplashScreen(),
     );
@@ -68,7 +68,7 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Tukonin',
+              appName,
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -76,7 +76,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
               textAlign: TextAlign.center,
             ),
-            if (appTitle != 'Tukonin') ...[
+            if (appTitle != appName) ...[
               const SizedBox(height: 6),
               Text(
                 appTitle,
@@ -820,13 +820,13 @@ class _SettingsPageState extends State<SettingsPage> {
             Row(children: [
               FilledButton(onPressed: () async {
                 final newTitle = _titleC.text.trim();
-                await s.saveTitle(newTitle.isEmpty ? 'Tukonin' : newTitle);
+                await s.saveTitle(newTitle.isEmpty ? appName : newTitle);
                 if (context.mounted) showAppSnackBar(context, 'Judul disimpan');
               }, child: const Text('Simpan')),
               const SizedBox(width: 12),
               OutlinedButton(onPressed: () async {
-                _titleC.text = 'Tukonin';
-                await s.saveTitle('Tukonin');
+                _titleC.text = appName;
+                await s.saveTitle(appName);
                 if (context.mounted) showAppSnackBar(context, 'Judul direset');
               }, child: const Text('Reset')),
             ]),
